@@ -5,7 +5,7 @@ import { redisStore } from '../store/RedisStore.js';
 
 // AI Service watches Redis pub/sub for game updates and auto-plays when it's AI's turn
 class AIService {
-  private subscriber = redisStore.getClient().duplicate();
+  private subscriber = redisStore.getClient().duplicate({ enableReadyCheck: false });
   private activeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   start() {

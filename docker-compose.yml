@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:7-alpine
@@ -12,8 +10,8 @@ services:
 
   backend:
     build:
-      context: ./apps/backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/backend/Dockerfile
     container_name: war-backend
     ports:
       - "3001:3001"
@@ -24,13 +22,13 @@ services:
     depends_on:
       - redis
     volumes:
-      - ./apps/backend:/app
+      - .:/app
       - /app/node_modules
 
   frontend:
     build:
-      context: ./apps/frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/frontend/Dockerfile
     container_name: war-frontend
     ports:
       - "3000:3000"
@@ -40,8 +38,9 @@ services:
     depends_on:
       - backend
     volumes:
-      - ./apps/frontend:/app
+      - .:/app
       - /app/node_modules
+      - /app/apps/frontend/.nuxt
 
 volumes:
   redis-data:

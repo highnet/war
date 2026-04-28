@@ -26,17 +26,17 @@
 
     <div v-if="userStore.id" class="w-full max-w-md space-y-4">
       <div class="bg-gray-800 rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">Create Game</h2>
+        <h2 class="text-xl font-semibold mb-4">Play</h2>
         <div class="flex gap-4">
           <button
-            @click="createGame('multiplayer')"
+            @click="findGame('multiplayer')"
             class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition disabled:opacity-50"
             :disabled="loading"
           >
-            Multiplayer
+            {{ loading && pendingMode === 'multiplayer' ? 'Matching...' : 'Multiplayer' }}
           </button>
           <button
-            @click="createGame('ai')"
+            @click="findGame('ai')"
             class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded transition disabled:opacity-50"
             :disabled="loading"
           >
@@ -100,6 +100,7 @@ const { query, mutate } = useGraphQL();
 const games = ref<Game[]>([]);
 const error = ref<string | null>(null);
 const loading = ref(false);
+const pendingMode = ref<string | null>(null);
 
 async function createUser() {
   if (!name.value.trim()) return;
@@ -117,18 +118,18 @@ async function createUser() {
   }
 }
 
-async function createGame(mode: string) {
+async function findGame(mode: string) {
   loading.value = true;
+  pendingMode.value = mode;
   error.value = null;
   try {
-    const res = await mutate('createGame', { mode });
-    // Creator always joins their game; backend auto-starts when 2nd player joins
-    await mutate('joinGame', { gameId: res.createGame.id, userId: userStore.id });
-    router.push(`/game/${res.createGame.id}`);
+    const res = await mutate('findOrCreateGame', { mode, userId: userStore.id });
+    router.push(`/game/${res.findOrCreateGame.id}`);
   } catch (err: any) {
-    error.value = err.message || 'Failed to create game';
+    error.value = err.message || 'Failed to find game';
   } finally {
     loading.value = false;
+    pendingMode.value = null;
   }
 }
 

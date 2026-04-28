@@ -36,6 +36,7 @@ export const schema = `
     pileCount: Int!
     scoreCount: Int!
     isConnected: Boolean!
+    isAI: Boolean!
   }
 
   type CurrentBattle {
@@ -73,6 +74,7 @@ export const schema = `
   type Mutation {
     createUser(name: String!): User!
     createGame(mode: String!): Game!
+    findOrCreateGame(mode: String!, userId: ID!): Game!
     joinGame(gameId: ID!, userId: ID!): Game!
     startGame(gameId: ID!): Game!
     playTurn(gameId: ID!, userId: ID!): Game!

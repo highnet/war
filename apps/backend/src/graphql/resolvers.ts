@@ -27,6 +27,25 @@ export const resolvers = {
       const game = await gameService.createGame(mode as 'multiplayer' | 'ai');
       return toGraphQLGame(game);
     },
+    async findOrCreateGame(_: unknown, { mode, userId }: { mode: string; userId: string }) {
+      if (mode === 'multiplayer') {
+        const games = await gameRepository.getAll();
+        const openGame = games.find(
+          (g) =>
+            g.status === 'WAITING' &&
+            g.mode === 'multiplayer' &&
+            g.players.length < 2 &&
+            !g.players.some((p) => p.id === userId)
+        );
+        if (openGame) {
+          const game = await gameService.joinGame(openGame.id, userId);
+          return toGraphQLGame(game);
+        }
+      }
+      const game = await gameService.createGame(mode as 'multiplayer' | 'ai');
+      const joined = await gameService.joinGame(game.id, userId);
+      return toGraphQLGame(joined);
+    },
     async joinGame(_: unknown, { gameId, userId }: { gameId: string; userId: string }) {
       const game = await gameService.joinGame(gameId, userId);
       return toGraphQLGame(game);
@@ -66,6 +85,7 @@ async function toGraphQLGame(entity: Awaited<ReturnType<typeof gameRepository.ge
       pileCount: p.scorePile.length,
       scoreCount: p.scorePile.length,
       isConnected: p.isConnected,
+      isAI: p.isAI,
     })),
     logs,
   };

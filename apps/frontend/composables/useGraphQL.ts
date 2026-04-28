@@ -5,7 +5,7 @@ const QUERIES: Record<string, string> = {
     query GetGames {
       getGames {
         id status mode
-        players { id name deckSize pileCount scoreCount isConnected }
+        players { id name deckSize pileCount scoreCount isConnected isAI }
         winnerId activePlayerId createdAt updatedAt
       }
     }
@@ -14,7 +14,7 @@ const QUERIES: Record<string, string> = {
     query GetGame($gameId: ID!) {
       getGame(gameId: $gameId) {
         id status mode
-        players { id name deckSize pileCount scoreCount isConnected }
+        players { id name deckSize pileCount scoreCount isConnected isAI }
         currentBattle {
           phase
           cards { playerId card { value suit } faceDown }
@@ -38,7 +38,16 @@ const MUTATIONS: Record<string, string> = {
     mutation CreateGame($mode: String!) {
       createGame(mode: $mode) {
         id status mode
-        players { id name deckSize pileCount scoreCount isConnected }
+        players { id name deckSize pileCount scoreCount isConnected isAI }
+        activePlayerId createdAt updatedAt
+      }
+    }
+  `,
+  findOrCreateGame: `
+    mutation FindOrCreateGame($mode: String!, $userId: ID!) {
+      findOrCreateGame(mode: $mode, userId: $userId) {
+        id status mode
+        players { id name deckSize pileCount scoreCount isConnected isAI }
         activePlayerId createdAt updatedAt
       }
     }
@@ -47,7 +56,7 @@ const MUTATIONS: Record<string, string> = {
     mutation JoinGame($gameId: ID!, $userId: ID!) {
       joinGame(gameId: $gameId, userId: $userId) {
         id status mode
-        players { id name deckSize pileCount scoreCount isConnected }
+        players { id name deckSize pileCount scoreCount isConnected isAI }
         activePlayerId createdAt updatedAt
       }
     }
@@ -56,7 +65,7 @@ const MUTATIONS: Record<string, string> = {
     mutation StartGame($gameId: ID!) {
       startGame(gameId: $gameId) {
         id status mode
-        players { id name deckSize pileCount scoreCount isConnected }
+        players { id name deckSize pileCount scoreCount isConnected isAI }
         activePlayerId createdAt updatedAt
       }
     }
@@ -65,7 +74,7 @@ const MUTATIONS: Record<string, string> = {
     mutation PlayTurn($gameId: ID!, $userId: ID!) {
       playTurn(gameId: $gameId, userId: $userId) {
         id status mode
-        players { id name deckSize pileCount scoreCount isConnected }
+        players { id name deckSize pileCount scoreCount isConnected isAI }
         currentBattle {
           phase
           cards { playerId card { value suit } faceDown }
@@ -81,7 +90,7 @@ const MUTATIONS: Record<string, string> = {
     mutation LeaveGame($gameId: ID!, $userId: ID!) {
       leaveGame(gameId: $gameId, userId: $userId) {
         id status mode
-        players { id name deckSize pileCount scoreCount isConnected }
+        players { id name deckSize pileCount scoreCount isConnected isAI }
         winnerId activePlayerId createdAt updatedAt
       }
     }

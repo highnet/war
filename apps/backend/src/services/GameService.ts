@@ -6,6 +6,7 @@ import { userRepository } from '../store/UserRepository.js';
 import { battleLogRepository } from '../store/BattleLogRepository.js';
 import { deckService as defaultDeckService } from './DeckService.js';
 import { redisPubSub } from '../websocket/RedisPubSub.js';
+import { battleLogRepository } from '../store/BattleLogRepository.js';
 
 function toGameError(err: unknown): GameError {
   if (err instanceof Error && 'code' in err) {
@@ -31,11 +32,12 @@ function logEntry(type: BattleLogEntry['type'], message: string): BattleLogEntry
 }
 
 async function publishAndReturn(game: GameEntity): Promise<GameEntity> {
-  await redisPubSub.publishGameUpdated(game.id, toGraphQLGame(game));
+  await redisPubSub.publishGameUpdated(game.id, await toGraphQLGame(game));
   return game;
 }
 
-function toGraphQLGame(entity: GameEntity): Record<string, unknown> {
+async function toGraphQLGame(entity: GameEntity): Promise<Record<string, unknown>> {
+  const logs = await battleLogRepository.getLogs(entity.id);
   return {
     ...entity,
     players: entity.players.map((p) => ({
@@ -47,6 +49,7 @@ function toGraphQLGame(entity: GameEntity): Record<string, unknown> {
       isConnected: p.isConnected,
       isAI: p.isAI,
     })),
+    logs,
   };
 }
 

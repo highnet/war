@@ -39,7 +39,6 @@
     <!-- Controls -->
     <div v-else class="flex flex-col items-center gap-4 w-full">
       <PlayTurnButton />
-      <SpeedControl />
     </div>
 
     <!-- Error Toast -->

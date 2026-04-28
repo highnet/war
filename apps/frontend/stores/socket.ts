@@ -3,6 +3,8 @@ import { ref } from 'vue';
 import { createClient, type Client } from 'graphql-ws';
 import type { Game } from '@war/types';
 
+declare const useRuntimeConfig: () => { public: { wsUrl: string } };
+
 export const useSocketStore = defineStore('socket', () => {
   const client = ref<Client | null>(null);
   const status = ref<'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING'>('DISCONNECTED');
@@ -42,6 +44,7 @@ export const useSocketStore = defineStore('socket', () => {
                 deckSize
                 pileCount
                 isConnected
+                isAI
               }
               currentBattle {
                 phase

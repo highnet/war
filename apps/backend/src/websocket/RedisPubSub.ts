@@ -5,7 +5,7 @@ import { EventEmitter } from 'events';
 // for higher throughput, switch to Redis Streams or a managed gateway.
 class RedisPubSub {
   private publisher = redisStore.getClient();
-  private subscriber = redisStore.getClient().duplicate();
+  private subscriber = redisStore.getClient().duplicate({ enableReadyCheck: false });
   private emitters = new Map<string, EventEmitter>();
 
   constructor() {

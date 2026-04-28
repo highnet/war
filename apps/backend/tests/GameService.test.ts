@@ -57,7 +57,15 @@ describe('GameService', () => {
   });
 
   it('plays a normal turn', async () => {
-    const service = new GameService();
+    const deckA = [
+      { value: 10, suit: 'HEARTS' as const },
+      { value: 5, suit: 'CLUBS' as const },
+    ];
+    const deckB = [
+      { value: 9, suit: 'DIAMONDS' as const },
+      { value: 4, suit: 'HEARTS' as const },
+    ];
+    const service = new GameService(mockDeckService(deckA, deckB));
     const game = await service.createGame('multiplayer');
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
