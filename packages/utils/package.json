@@ -2,8 +2,18 @@
   "name": "@war/utils",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
   "devDependencies": {
     "typescript": "^5.8.0",
     "vitest": "^4.1.5"

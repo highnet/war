@@ -1,33 +1,47 @@
-import { redisStore } from './store/RedisStore.js';
-import { MercuriusCommonOptions } from 'mercurius';
+import { redisStore } from '../store/RedisStore.js';
+import { EventEmitter } from 'events';
 
 // SCALE: Redis Pub/Sub already supports multi-instance backends;
 // for higher throughput, switch to Redis Streams or a managed gateway.
 class RedisPubSub {
   private publisher = redisStore.getClient();
   private subscriber = redisStore.getClient().duplicate();
-  private emitter: MercuriusCommonOptions['subscription']['emitter'];
+  private emitters = new Map<string, EventEmitter>();
 
   constructor() {
-    this.emitter = {
-      emit: async (event) => {
-        await this.publisher.publish(event.topic, JSON.stringify(event.payload));
-      },
-      on: (topic, listener) => {
-        this.subscriber.subscribe(topic, (err) => {
-          if (err) console.error('Redis subscribe error:', err);
-        });
-        this.subscriber.on('message', (channel, message) => {
-          if (channel === topic) {
-            listener(JSON.parse(message));
-          }
-        });
-      },
-    };
+    this.subscriber.on('message', (channel, message) => {
+      const emitter = this.emitters.get(channel);
+      if (emitter) {
+        emitter.emit('message', JSON.parse(message));
+      }
+    });
   }
 
-  getEmitter(): MercuriusCommonOptions['subscription']['emitter'] {
-    return this.emitter;
+  async subscribe(topic: string): Promise<AsyncIterableIterator<unknown>> {
+    await this.subscriber.subscribe(topic);
+    const emitter = new EventEmitter();
+    this.emitters.set(topic, emitter);
+
+    const asyncIterator: AsyncIterableIterator<unknown> = {
+      [Symbol.asyncIterator]() {
+        return asyncIterator;
+      },
+      async next() {
+        return new Promise((resolve) => {
+          emitter.once('message', (data) => {
+            resolve({ value: data, done: false });
+          });
+        });
+      },
+      async return() {
+        return { value: undefined, done: true };
+      },
+      async throw(err) {
+        throw err;
+      },
+    };
+
+    return asyncIterator;
   }
 
   async publishGameUpdated(gameId: string, game: unknown): Promise<void> {

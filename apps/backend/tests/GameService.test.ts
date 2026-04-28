@@ -12,6 +12,14 @@ async function createUser(name: string) {
   return user;
 }
 
+function mockDeckService(deckA: import('@war/types').Card[], deckB: import('@war/types').Card[]) {
+  return {
+    createAndSplit(): [typeof deckA, typeof deckB] {
+      return [deckA, deckB];
+    },
+  };
+}
+
 describe('GameService', () => {
   beforeEach(async () => {
     const redis = redisStore.getClient();
@@ -60,7 +68,130 @@ describe('GameService', () => {
     const firstPlayerId = g.activePlayerId!;
     g = await service.playTurn(game.id, firstPlayerId);
     expect(g.currentBattle).not.toBeNull();
-    expect(g.currentBattle!.phase).toBe('DRAW');
+    expect(g.currentBattle!.phase).toBe('RESOLVED');
+  });
+
+  it('triggers war when cards are equal', async () => {
+    const deckA = [
+      { value: 10, suit: 'HEARTS' as const },
+      { value: 5, suit: 'CLUBS' as const },
+      { value: 3, suit: 'DIAMONDS' as const },
+      { value: 2, suit: 'SPADES' as const },
+    ];
+    const deckB = [
+      { value: 10, suit: 'DIAMONDS' as const },
+      { value: 4, suit: 'HEARTS' as const },
+      { value: 3, suit: 'CLUBS' as const },
+      { value: 2, suit: 'DIAMONDS' as const },
+    ];
+    const service = new GameService(mockDeckService(deckA, deckB));
+    const game = await service.createGame('multiplayer');
+    const alice = await createUser('Alice');
+    const bob = await createUser('Bob');
+    await service.joinGame(game.id, alice.id);
+    await service.joinGame(game.id, bob.id);
+    let g = await service.startGame(game.id);
+    const firstPlayerId = g.activePlayerId!;
+    g = await service.playTurn(game.id, firstPlayerId);
+    expect(g.currentBattle!.phase).toBe('WAR');
+    expect(g.currentBattle!.isWar).toBe(true);
+  });
+
+  it('resolves war step-by-step', async () => {
+    const deckA = [
+      { value: 10, suit: 'HEARTS' as const },   // draw
+      { value: 5, suit: 'CLUBS' as const },     // war face-down
+      { value: 8, suit: 'DIAMONDS' as const },  // war face-up (wins)
+    ];
+    const deckB = [
+      { value: 10, suit: 'DIAMONDS' as const },  // draw
+      { value: 4, suit: 'HEARTS' as const },     // war face-down
+      { value: 3, suit: 'CLUBS' as const },      // war face-up (loses)
+    ];
+    const service = new GameService(mockDeckService(deckA, deckB));
+    const game = await service.createGame('multiplayer');
+    const alice = await createUser('Alice');
+    const bob = await createUser('Bob');
+    await service.joinGame(game.id, alice.id);
+    await service.joinGame(game.id, bob.id);
+    let g = await service.startGame(game.id);
+    const firstPlayerId = g.activePlayerId!;
+
+    // First playTurn triggers war
+    g = await service.playTurn(game.id, firstPlayerId);
+    expect(g.currentBattle!.phase).toBe('WAR');
+
+    // Second playTurn resolves war (same player because activePlayerId doesn't change during war)
+    g = await service.playTurn(game.id, firstPlayerId);
+    expect(g.currentBattle!.phase).toBe('RESOLVED');
+    expect(g.currentBattle!.winnerId).toBe(firstPlayerId);
+  });
+
+  it('handles recursive war', async () => {
+    const deckA = [
+      { value: 10, suit: 'HEARTS' as const },
+      { value: 5, suit: 'CLUBS' as const },
+      { value: 7, suit: 'DIAMONDS' as const },
+      { value: 9, suit: 'SPADES' as const },
+      { value: 14, suit: 'HEARTS' as const },
+    ];
+    const deckB = [
+      { value: 10, suit: 'DIAMONDS' as const },
+      { value: 4, suit: 'HEARTS' as const },
+      { value: 7, suit: 'CLUBS' as const },
+      { value: 2, suit: 'DIAMONDS' as const },
+      { value: 3, suit: 'SPADES' as const },
+    ];
+    const service = new GameService(mockDeckService(deckA, deckB));
+    const game = await service.createGame('multiplayer');
+    const alice = await createUser('Alice');
+    const bob = await createUser('Bob');
+    await service.joinGame(game.id, alice.id);
+    await service.joinGame(game.id, bob.id);
+    let g = await service.startGame(game.id);
+    const firstPlayerId = g.activePlayerId!;
+
+    // First playTurn: 10 vs 10 -> WAR
+    g = await service.playTurn(game.id, firstPlayerId);
+    expect(g.currentBattle!.phase).toBe('WAR');
+
+    // Second playTurn: 7 vs 7 -> WAR continues (recursive)
+    g = await service.playTurn(game.id, firstPlayerId);
+    expect(g.currentBattle!.phase).toBe('WAR');
+
+    // Third playTurn: 14 vs 3 -> RESOLVED
+    g = await service.playTurn(game.id, firstPlayerId);
+    expect(g.currentBattle!.phase).toBe('RESOLVED');
+    expect(g.currentBattle!.winnerId).toBe(firstPlayerId);
+  });
+
+  it('ends game when player has insufficient cards for war', async () => {
+    const deckA = [
+      { value: 10, suit: 'HEARTS' as const },
+    ];
+    const deckB = [
+      { value: 10, suit: 'DIAMONDS' as const },
+      { value: 5, suit: 'CLUBS' as const },
+      { value: 3, suit: 'SPADES' as const },
+    ];
+    const service = new GameService(mockDeckService(deckA, deckB));
+    const game = await service.createGame('multiplayer');
+    const alice = await createUser('Alice');
+    const bob = await createUser('Bob');
+    await service.joinGame(game.id, alice.id);
+    await service.joinGame(game.id, bob.id);
+    let g = await service.startGame(game.id);
+    const firstPlayerId = g.activePlayerId!;
+    const secondPlayerId = g.players.find(p => p.id !== firstPlayerId)!.id;
+
+    // First playTurn triggers war
+    g = await service.playTurn(game.id, firstPlayerId);
+    expect(g.currentBattle!.phase).toBe('WAR');
+
+    // Second playTurn resolves war step, but first player only has 0 cards left -> insufficient
+    g = await service.playTurn(game.id, firstPlayerId);
+    expect(g.status).toBe('ENDED');
+    expect(g.winnerId).toBe(secondPlayerId);
   });
 
   it('forfeits on leave during PLAYING', async () => {

@@ -18,8 +18,20 @@
       position="bottom"
     />
 
+    <!-- Waiting to Start -->
+    <div v-if="gameStore.game?.status === 'WAITING'" class="flex flex-col items-center gap-4">
+      <div class="text-xl text-yellow-400">Waiting to start...</div>
+      <button
+        v-if="canStart"
+        @click="startGame"
+        class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded transition"
+      >
+        Start Game
+      </button>
+    </div>
+
     <!-- Controls -->
-    <div class="flex flex-col items-center gap-4 w-full">
+    <div v-else class="flex flex-col items-center gap-4 w-full">
       <PlayTurnButton />
       <SpeedControl />
     </div>
@@ -48,11 +60,28 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useGameStore } from '~/stores/game';
+import { useUserStore } from '~/stores/user';
 import { useRouter } from 'vue-router';
+import { useGraphQL } from '~/composables/useGraphQL';
 
 const gameStore = useGameStore();
+const userStore = useUserStore();
 const router = useRouter();
+const { mutate } = useGraphQL();
+
+const canStart = computed(() => {
+  return (
+    gameStore.game?.status === 'WAITING' &&
+    gameStore.game?.players.length === 2
+  );
+});
+
+async function startGame() {
+  if (!gameStore.game) return;
+  await mutate('startGame', { gameId: gameStore.game.id });
+}
 
 function goToLobby() {
   router.push('/lobby');

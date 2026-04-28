@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+apps/backend/dist/
+apps/frontend/.nuxt/
+apps/frontend/dist/
+apps/frontend/.output/
+apps/frontend/.vite/
+apps/frontend/*.log
+packages/*/dist/
+packages/*/*.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Docker
+*.local.yml
+docker-compose.override.yml
+
+# Redis dump
+*.rdb
+*.aof
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# TypeScript
+*.tsbuildinfo

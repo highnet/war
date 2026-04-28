@@ -103,8 +103,9 @@ async function createUser() {
 async function createGame(mode: string) {
   const res = await mutate('createGame', { mode });
   if (mode === 'ai') {
-    // AI game: join automatically
+    // AI game: join and start automatically
     await mutate('joinGame', { gameId: res.createGame.id, userId: userStore.id });
+    await mutate('startGame', { gameId: res.createGame.id });
   }
   router.push(`/game/${res.createGame.id}`);
 }

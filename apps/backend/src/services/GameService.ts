@@ -4,7 +4,7 @@ import type { GameEntity, PlayerEntity, CurrentBattle, BattleCard, GameError } f
 import { gameRepository } from '../store/GameRepository.js';
 import { userRepository } from '../store/UserRepository.js';
 import { battleLogRepository } from '../store/BattleLogRepository.js';
-import { deckService } from './DeckService.js';
+import { deckService as defaultDeckService } from './DeckService.js';
 import { redisPubSub } from '../websocket/RedisPubSub.js';
 
 function toGameError(err: unknown): GameError {
@@ -44,11 +44,18 @@ function toGraphQLGame(entity: GameEntity): Record<string, unknown> {
       deckSize: p.deck.length,
       pileCount: p.deck.length,
       isConnected: p.isConnected,
+      isAI: p.isAI,
     })),
   };
 }
 
 export class GameService {
+  private deckService: { createAndSplit(): [Card[], Card[]] };
+
+  constructor(deckServiceOverride?: { createAndSplit(): [Card[], Card[]] }) {
+    this.deckService = deckServiceOverride || defaultDeckService;
+  }
+
   async createGame(mode: 'multiplayer' | 'ai'): Promise<GameEntity> {
     const game: GameEntity = {
       id: randomUUID(),
@@ -114,7 +121,7 @@ export class GameService {
     if (game.status !== 'WAITING') throwError('INVALID_ACTION', 'Game already started');
     if (game.players.length !== 2) throwError('INVALID_ACTION', 'Need 2 players to start');
 
-    const [deckA, deckB] = deckService.createAndSplit();
+    const [deckA, deckB] = this.deckService.createAndSplit();
     game.players[0].deck = deckA;
     game.players[0].pileCount = deckA.length;
     game.players[1].deck = deckB;

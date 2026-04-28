@@ -48,8 +48,7 @@ export const resolvers = {
     gameUpdated: {
       subscribe: async (_: unknown, { gameId }: { gameId: string }) => {
         const topic = `game:${gameId}:updates`;
-        // Use Mercurius subscription API
-        return redisPubSub.getEmitter().on(topic, (payload: unknown) => payload);
+        return redisPubSub.subscribe(topic);
       },
     },
   },
