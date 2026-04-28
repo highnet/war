@@ -3,6 +3,7 @@
 ## 1. Overview & Goals
 
 Build a production-style fullstack monorepo for the card game **War** with:
+
 - Real-time multiplayer via WebSockets
 - Single-player vs AI
 - Step-by-step war resolution
@@ -18,25 +19,25 @@ Build a production-style fullstack monorepo for the card game **War** with:
 
 ## 2. Tech Stack (Latest Stable Versions)
 
-| Layer | Package | Version | Note |
-|---|---|---|---|
-| Root Monorepo | npm workspaces | built-in |  |
-| Containerization | docker / docker-compose | 29.x / 2.40.x | Desktop available |
-| Data Store | redis | 7.x | via Docker Compose |
-| Redis Client | ioredis | 5.x |  |
-| Backend Framework | fastify | 5.8.5 |  |
-| GraphQL | mercurius | 16.9.0 | Fastify-native GraphQL |
-| GraphQL Core | graphql | 16.13.2 | peer dep for Mercurius |
-| WebSocket Subscriptions | graphql-ws | 6.0.8 | Mercurius subscription driver |
-| Backend Language | typescript | 5.8.x | via `tsx` for dev |
-| Frontend Framework | nuxt | 3.21.2 | latest stable Nuxt 3 (SSR) |
-| Frontend UI | vue | 3.5.33 | Composition API |
-| State Management | pinia | 3.0.4 |  |
-| Pinia Nuxt Module | @pinia/nuxt | 0.11.3 |  |
-| Styling | tailwindcss | 4.2.4 |  |
-| Tailwind Nuxt Module | @nuxtjs/tailwindcss | 6.14.0 |  |
-| Testing | vitest | 4.1.5 | both frontend & backend |
-| HTTP Client | $fetch (ofetch) | built-in | Nuxt universal fetch |
+| Layer                   | Package                 | Version       | Note                          |
+| ----------------------- | ----------------------- | ------------- | ----------------------------- |
+| Root Monorepo           | npm workspaces          | built-in      |                               |
+| Containerization        | docker / docker-compose | 29.x / 2.40.x | Desktop available             |
+| Data Store              | redis                   | 7.x           | via Docker Compose            |
+| Redis Client            | ioredis                 | 5.x           |                               |
+| Backend Framework       | fastify                 | 5.8.5         |                               |
+| GraphQL                 | mercurius               | 16.9.0        | Fastify-native GraphQL        |
+| GraphQL Core            | graphql                 | 16.13.2       | peer dep for Mercurius        |
+| WebSocket Subscriptions | graphql-ws              | 6.0.8         | Mercurius subscription driver |
+| Backend Language        | typescript              | 5.8.x         | via `tsx` for dev             |
+| Frontend Framework      | nuxt                    | 3.21.2        | latest stable Nuxt 3 (SSR)    |
+| Frontend UI             | vue                     | 3.5.33        | Composition API               |
+| State Management        | pinia                   | 3.0.4         |                               |
+| Pinia Nuxt Module       | @pinia/nuxt             | 0.11.3        |                               |
+| Styling                 | tailwindcss             | 4.2.4         |                               |
+| Tailwind Nuxt Module    | @nuxtjs/tailwindcss     | 6.14.0        |                               |
+| Testing                 | vitest                  | 4.1.5         | both frontend & backend       |
+| HTTP Client             | $fetch (ofetch)         | built-in      | Nuxt universal fetch          |
 
 > **Decision:** Using Nuxt 3.21.2 (latest stable 3.x) rather than Nuxt 4.x to honor the original `Nuxt 3` spec while remaining current. Nuxt 4.x is marked `latest` on npm but the `3x` tag confirms 3.21.2 is the maintained LTS line.
 
@@ -223,28 +224,33 @@ type Subscription {
 ### 4.2 Redis Data Model
 
 **Game State:**
+
 - Key: `game:{gameId}`
 - Type: Hash
 - Fields: `status`, `mode`, `players` (JSON), `currentBattle` (JSON), `winnerId`, `activePlayerId`, `createdAt`, `updatedAt`
 - TTL: 1800 seconds (30 minutes) — refreshed on every update
 
 **Battle Logs:**
+
 - Key: `game:{gameId}:logs`
 - Type: List
 - Max length: 100 entries (LTRIM after LPUSH)
 
 **Users:**
+
 - Key: `user:{userId}`
 - Type: Hash
 - Fields: `id`, `name`, `isAI`
 
 **Pub/Sub Channel:**
+
 - Channel: `game:{gameId}:updates`
 - Payload: full Game JSON
 
 ### 4.3 Game State Machine (Step-by-Step War)
 
 **States stored per Game (in Redis hash):**
+
 - `players[0..1].deck: Card[]` — serialized as JSON string in hash field
 - `players[0..1].isConnected: boolean`
 - `currentBattle: { phase, cards[], winnerId, isWar }`
@@ -254,7 +260,7 @@ type Subscription {
 
 **`playTurn(gameId, userId)` logic:**
 
-1. **Validation:** game exists, started, not ended, is user's turn, random 5% simulated failure
+1. **Validation:** game exists, started, not ended, is user's turn
 2. **If `currentBattle` is null or `RESOLVED`** → **Start new battle (DRAW)**
    - Each player draws top card → `currentBattle.cards`
    - `phase = DRAW`
@@ -313,12 +319,12 @@ type Subscription {
   - `NOT_YOUR_TURN`
   - `GAME_NOT_STARTED`
   - `INSUFFICIENT_CARDS`
-  - `SIMULATED_FAILURE` (random 5%)
 - Returned as structured GraphQL errors with `extensions.code`
 
 ### 4.9 Scalability Extension Points
 
 Inline `// SCALE:` comments mark:
+
 - `RedisStore` → Redis Cluster or AWS ElastiCache for horizontal scaling
 - `BattleLogRepository` → append-only event store (Kafka/EventStoreDB) for audit trails
 - `graphql-ws` → sticky sessions or shared subscription state via Redis
@@ -330,10 +336,10 @@ Inline `// SCALE:` comments mark:
 
 ### 5.1 Pages & Routing
 
-| Route | Purpose |
-|---|---|
-| `/lobby` | Name entry, create/join games, list open games |
-| `/game/[id]` | Main game board |
+| Route        | Purpose                                        |
+| ------------ | ---------------------------------------------- |
+| `/lobby`     | Name entry, create/join games, list open games |
+| `/game/[id]` | Main game board                                |
 
 ### 5.2 Game Board Layout
 
@@ -408,6 +414,7 @@ Inline `// SCALE:` comments mark:
 All events flow through the single GraphQL subscription `gameUpdated(gameId)`, which pushes the full `Game` object. The frontend derives specific UI states from `Game` fields.
 
 **Implicit events (derived from Game state):**
+
 - `TURN_PLAYED` — `currentBattle.phase === DRAW`
 - `WAR_TRIGGERED` — `currentBattle.isWar === true`
 - `BATTLE_RESOLVED` — `currentBattle.phase === RESOLVED`
@@ -421,7 +428,7 @@ All events flow through the single GraphQL subscription `gameUpdated(gameId)`, w
 ### 8.1 Shared Types (`packages/types/src/index.ts`)
 
 ```typescript
-export type Suit = 'HEARTS' | 'DIAMONDS' | 'CLUBS' | 'SPADES';
+export type Suit = "HEARTS" | "DIAMONDS" | "CLUBS" | "SPADES";
 
 export interface Card {
   value: number; // 2-14
@@ -429,16 +436,16 @@ export interface Card {
 }
 
 export enum GameStatus {
-  WAITING = 'WAITING',
-  PLAYING = 'PLAYING',
-  ENDED = 'ENDED',
-  FORFEITED = 'FORFEITED',
+  WAITING = "WAITING",
+  PLAYING = "PLAYING",
+  ENDED = "ENDED",
+  FORFEITED = "FORFEITED",
 }
 
 export enum BattlePhase {
-  DRAW = 'DRAW',
-  WAR = 'WAR',
-  RESOLVED = 'RESOLVED',
+  DRAW = "DRAW",
+  WAR = "WAR",
+  RESOLVED = "RESOLVED",
 }
 ```
 
@@ -448,7 +455,7 @@ export enum BattlePhase {
 export interface GameEntity {
   id: string;
   status: GameStatus;
-  mode: 'multiplayer' | 'ai';
+  mode: "multiplayer" | "ai";
   players: PlayerEntity[];
   currentBattle: CurrentBattle | null;
   winnerId: string | null;
@@ -482,7 +489,7 @@ export interface BattleCard {
 
 export interface BattleLogEntry {
   id: string;
-  type: 'DRAW' | 'WAR' | 'RESOLVED' | 'FORFEIT' | 'EXPIRED';
+  type: "DRAW" | "WAR" | "RESOLVED" | "FORFEIT" | "EXPIRED";
   message: string;
   timestamp: Date;
 }
@@ -493,6 +500,7 @@ export interface BattleLogEntry {
 ## 9. Implementation Checkpoints
 
 ### Checkpoint 0: Project Bootstrap
+
 - [ ] Root `package.json` with npm workspaces
 - [ ] `docker-compose.yml` with Redis service
 - [ ] Shared packages `types` and `utils` with TypeScript config
@@ -503,12 +511,14 @@ export interface BattleLogEntry {
 - [ ] Verify `docker-compose up redis` starts Redis successfully
 
 ### Checkpoint 1: Shared Packages
+
 - [ ] `packages/types` — enums and interfaces
 - [ ] `packages/utils` — `createDeck`, `shuffle`, `compareCards`
 - [ ] Unit tests for utils
 - [ ] All tests pass
 
 ### Checkpoint 2: Backend Core
+
 - [ ] Fastify + Mercurius server boot
 - [ ] GraphQL schema + resolvers (Queries, Mutations)
 - [ ] `RedisStore` — ioredis wrapper with connection management
@@ -525,6 +535,7 @@ export interface BattleLogEntry {
 - [ ] Unit tests for GameService (normal, war, recursive war, insufficient cards)
 
 ### Checkpoint 3: Backend Real-Time
+
 - [ ] `graphql-ws` integration with Mercurius
 - [ ] `gameUpdated` subscription backed by Redis pub/sub
 - [ ] WebSocket broadcasts on all state changes
@@ -532,6 +543,7 @@ export interface BattleLogEntry {
 - [ ] Verify Redis pub/sub messages are received
 
 ### Checkpoint 4: Frontend Foundation
+
 - [ ] Nuxt 3 pages: `/lobby`, `/game/[id]`
 - [ ] Tailwind CSS configured
 - [ ] Pinia stores: `user`, `game`, `socket`
@@ -539,6 +551,7 @@ export interface BattleLogEntry {
 - [ ] `useGameSocket` composable (subscription via `graphql-ws`)
 
 ### Checkpoint 5: Frontend Game UI
+
 - [ ] `GameBoard.vue` — layout shell
 - [ ] `DeckPile.vue` — deck with count badge (opponent always visible)
 - [ ] `BattleArena.vue` — card reveal area
@@ -549,6 +562,7 @@ export interface BattleLogEntry {
 - [ ] `SpeedControl.vue` — speed selector + auto-play toggle
 
 ### Checkpoint 6: Frontend State & Real-Time
+
 - [ ] Lobby: create/join/list games
 - [ ] Game page: load game, subscribe to updates
 - [ ] Play Turn mutation + optimistic UI
@@ -557,6 +571,7 @@ export interface BattleLogEntry {
 - [ ] Leave game on page close / navigate away
 
 ### Checkpoint 7: Docker & End-to-End
+
 - [ ] `docker-compose up` starts Redis + backend together
 - [ ] Backend Docker image builds and runs
 - [ ] AI mode: create AI game → play full match → verify win/loss
@@ -566,6 +581,7 @@ export interface BattleLogEntry {
 - [ ] Expiry: verify Redis TTL cleans up old games
 
 ### Checkpoint 8: Documentation
+
 - [ ] `README.md` — setup, run, test, architecture overview
 - [ ] `AGENTS.md` — agent quick-start
 - [ ] Inline code comments for scalability notes
@@ -575,14 +591,15 @@ export interface BattleLogEntry {
 
 ## 10. Testing Strategy
 
-| Test File | Coverage |
-|---|---|
-| `packages/utils/tests/utils.test.ts` | `createDeck` returns 52 cards; `shuffle` randomizes; `compareCards` returns winner |
-| `apps/backend/tests/GameService.test.ts` | Normal round; war; recursive war; insufficient cards = loss; AI auto-play |
-| `apps/backend/tests/DeckService.test.ts` | Shuffle distribution; split equality |
-| `apps/frontend/tests/gameStore.test.ts` | Store init; `setGame` updates; `isMyTurn` computed; `warActive` computed |
+| Test File                                | Coverage                                                                           |
+| ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| `packages/utils/tests/utils.test.ts`     | `createDeck` returns 52 cards; `shuffle` randomizes; `compareCards` returns winner |
+| `apps/backend/tests/GameService.test.ts` | Normal round; war; recursive war; insufficient cards = loss; AI auto-play          |
+| `apps/backend/tests/DeckService.test.ts` | Shuffle distribution; split equality                                               |
+| `apps/frontend/tests/gameStore.test.ts`  | Store init; `setGame` updates; `isMyTurn` computed; `warActive` computed           |
 
 Run commands:
+
 ```bash
 npm run test --workspace=packages/utils
 npm run test --workspace=apps/backend
@@ -596,7 +613,7 @@ npm run test --workspace=apps/frontend
 ### 11.1 docker-compose.yml
 
 ```yaml
-version: '3.8'
+version: "3.8"
 services:
   redis:
     image: redis:7-alpine
@@ -666,9 +683,11 @@ CMD ["npm", "run", "dev"]
 ## 12. Scalability Notes
 
 ### Current Architecture
+
 Redis is used for state, logs, and pub/sub. This is production-grade for moderate scale but still single-node Redis.
 
 ### Scaling Path
+
 1. **Redis Store:** Upgrade to Redis Cluster or AWS ElastiCache for high availability.
 2. **Pub/Sub:** Redis Pub/Sub already supports multi-instance backends; just point all instances to the same Redis.
 3. **WebSocket Connections:** Use a load balancer with sticky sessions or migrate to a managed WebSocket gateway.
@@ -681,6 +700,7 @@ Redis is used for state, logs, and pub/sub. This is production-grade for moderat
 ## 13. Run Instructions
 
 ### Local Dev (without Docker)
+
 ```bash
 # Start Redis manually (requires local Redis installed)
 redis-server
@@ -699,6 +719,7 @@ npm run dev --workspace=apps/frontend
 ```
 
 ### Docker Compose (recommended)
+
 ```bash
 # Start everything
  docker-compose up --build
@@ -714,6 +735,7 @@ npm run dev --workspace=apps/frontend
 ```
 
 ### Run Tests
+
 ```bash
 npm run test --workspace=packages/utils
 npm run test --workspace=apps/backend
@@ -724,16 +746,14 @@ npm run test --workspace=apps/frontend
 
 ## 14. Decisions Log
 
-| Decision | Rationale |
-|---|---|
-| npm workspaces | Built-in, no extra tooling, matches user's `npm` environment |
-| Mercurius over Apollo Server | Native Fastify integration, lower overhead, `graphql-ws` built-in support |
-| Single subscription `gameUpdated` | Simpler frontend state management; derive all UI events from full Game object |
-| Redis for state + logs + pub/sub | Production-grade in-memory store with TTL, persistence options, and built-in pub/sub |
-| Step-by-step war | Dramatic UX; each click reveals one phase of war |
-| Nuxt 3.21.2 | Latest stable 3.x line; Nuxt 4.x is `latest` on npm but may introduce breaking changes |
-| `tsx` for backend dev | Fast, zero-config TypeScript execution for Node.js |
-| Random 5% failure | Simulates real-world instability for robust error handling testing |
-| 30-minute TTL | Prevents memory leaks from abandoned games; adjustable via env var |
-| Max 100 log entries | Prevents unbounded memory growth in long games |
-| Docker Compose | One-command startup for full stack including Redis |
+| Decision                          | Rationale                                                                              |
+| --------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| npm workspaces                    | Built-in, no extra tooling, matches user's `npm` environment                           |
+| Mercurius over Apollo Server      | Native Fastify integration, lower overhead, `graphql-ws` built-in support              |
+| Single subscription `gameUpdated` | Simpler frontend state management; derive all UI events from full Game object          |
+| Redis for state + logs + pub/sub  | Production-grade in-memory store with TTL, persistence options, and built-in pub/sub   |
+| Step-by-step war                  | Dramatic UX; each click reveals one phase of war                                       |
+| Nuxt 3.21.2                       | Latest stable 3.x line; Nuxt 4.x is `latest` on npm but may introduce breaking changes |
+| `tsx` for backend dev             | Fast, zero-config TypeScript execution for Node.js                                     | eaks from abandoned games; adjustable via env var |
+| Max 100 log entries               | Prevents unbounded memory growth in long games                                         |
+| Docker Compose                    | One-command startup for full stack including Redis                                     |
