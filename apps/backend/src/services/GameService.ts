@@ -42,7 +42,8 @@ function toGraphQLGame(entity: GameEntity): Record<string, unknown> {
       id: p.id,
       name: p.name,
       deckSize: p.deck.length,
-      pileCount: p.deck.length,
+      pileCount: p.scorePile.length,
+      scoreCount: p.scorePile.length,
       isConnected: p.isConnected,
       isAI: p.isAI,
     })),
@@ -83,6 +84,7 @@ export class GameService {
         name: aiUser.name,
         deck: [],
         pileCount: 0,
+        scorePile: [],
         isConnected: true,
         isAI: true,
       });
@@ -107,11 +109,18 @@ export class GameService {
       name: user.name,
       deck: [],
       pileCount: 0,
+      scorePile: [],
       isConnected: true,
       isAI: user.isAI,
     });
 
     await gameRepository.update(game);
+
+    // Auto-start when 2 players have joined
+    if (game.players.length === 2) {
+      return this.startGame(gameId);
+    }
+
     return publishAndReturn(game);
   }
 
@@ -124,8 +133,10 @@ export class GameService {
     const [deckA, deckB] = this.deckService.createAndSplit();
     game.players[0].deck = deckA;
     game.players[0].pileCount = deckA.length;
+    game.players[0].scorePile = [];
     game.players[1].deck = deckB;
     game.players[1].pileCount = deckB.length;
+    game.players[1].scorePile = [];
 
     game.status = 'PLAYING' as GameStatus;
     game.activePlayerId = game.players[0].id;
@@ -160,12 +171,16 @@ export class GameService {
   }
 
   private async resolveDraw(game: GameEntity, player: PlayerEntity, opponent: PlayerEntity): Promise<GameEntity> {
-    if (player.deck.length === 0 || opponent.deck.length === 0) {
-      game.winnerId = player.deck.length > 0 ? player.id : opponent.id;
-      game.status = 'ENDED' as GameStatus;
-      await battleLogRepository.append(game.id, logEntry('RESOLVED', `${game.winnerId === player.id ? player.name : opponent.name} wins the game!`));
-      await gameRepository.update(game);
-      return publishAndReturn(game);
+    // Both decks empty -> final scoring
+    if (player.deck.length === 0 && opponent.deck.length === 0) {
+      return this.finishGameByScore(game, player, opponent);
+    }
+    // One deck empty -> forfeit
+    if (player.deck.length === 0) {
+      return this.forfeit(game, player, opponent, `${player.name} has no cards left`);
+    }
+    if (opponent.deck.length === 0) {
+      return this.forfeit(game, opponent, player, `${opponent.name} has no cards left`);
     }
 
     const cardA = player.deck.shift()!;
@@ -196,19 +211,18 @@ export class GameService {
     battle.winnerId = winner.id;
     battle.phase = 'RESOLVED' as BattlePhase;
 
-    // Winner collects pile
-    winner.deck.push(...battle.cards.map((c) => c.card));
-    winner.pileCount = winner.deck.length;
-    opponent.pileCount = opponent.deck.length;
+    // Winner collects pile to scorePile
+    winner.scorePile.push(...battle.cards.map((c) => c.card));
+    winner.pileCount = winner.scorePile.length;
+    opponent.pileCount = opponent.scorePile.length;
 
     await battleLogRepository.append(game.id, logEntry('RESOLVED', `${winner.name} wins the battle!`));
 
     game.activePlayerId = opponent.id; // Switch turn
 
-    if (opponent.deck.length === 0) {
-      game.winnerId = winner.id;
-      game.status = 'ENDED' as GameStatus;
-      await battleLogRepository.append(game.id, logEntry('RESOLVED', `${winner.name} wins the game!`));
+    // Check if both decks empty after this draw
+    if (player.deck.length === 0 && opponent.deck.length === 0) {
+      return this.finishGameByScore(game, player, opponent);
     }
 
     await gameRepository.update(game);
@@ -253,30 +267,53 @@ export class GameService {
     game.currentBattle!.winnerId = winner.id;
     game.currentBattle!.phase = 'RESOLVED' as BattlePhase;
 
-    // Winner collects entire pile
-    winner.deck.push(...game.currentBattle!.cards.map((c) => c.card));
-    winner.pileCount = winner.deck.length;
-    opponent.pileCount = opponent.deck.length;
+    // Winner collects entire pile to scorePile
+    winner.scorePile.push(...game.currentBattle!.cards.map((c) => c.card));
+    winner.pileCount = winner.scorePile.length;
+    opponent.pileCount = opponent.scorePile.length;
 
     await battleLogRepository.append(game.id, logEntry('RESOLVED', `${winner.name} wins the war!`));
 
     game.activePlayerId = opponent.id; // Switch turn
 
-    if (opponent.deck.length === 0) {
-      game.winnerId = winner.id;
-      game.status = 'ENDED' as GameStatus;
-      await battleLogRepository.append(game.id, logEntry('RESOLVED', `${winner.name} wins the game!`));
+    if (player.deck.length === 0 && opponent.deck.length === 0) {
+      return this.finishGameByScore(game, player, opponent);
     }
 
     await gameRepository.update(game);
     return publishAndReturn(game);
   }
 
+  private async finishGameByScore(game: GameEntity, player: PlayerEntity, opponent: PlayerEntity): Promise<GameEntity> {
+    const playerScore = player.scorePile.length;
+    const opponentScore = opponent.scorePile.length;
+    if (playerScore > opponentScore) {
+      game.winnerId = player.id;
+    } else if (opponentScore > playerScore) {
+      game.winnerId = opponent.id;
+    } else {
+      game.winnerId = null; // Tie
+    }
+    game.status = 'ENDED' as GameStatus;
+    const msg = game.winnerId
+      ? `${game.winnerId === player.id ? player.name : opponent.name} wins the game ${Math.max(playerScore, opponentScore)}-${Math.min(playerScore, opponentScore)}!`
+      : `Game tied ${playerScore}-${opponentScore}!`;
+    await battleLogRepository.append(game.id, logEntry('RESOLVED', msg));
+    await gameRepository.update(game);
+    return publishAndReturn(game);
+  }
+
   private async forfeit(game: GameEntity, loser: PlayerEntity, winner: PlayerEntity, reason: string): Promise<GameEntity> {
+    // Winner gets any remaining cards from both decks added to their score pile
+    winner.scorePile.push(...loser.deck, ...winner.deck);
+    loser.deck = [];
+    winner.deck = [];
+    loser.pileCount = loser.scorePile.length;
+    winner.pileCount = winner.scorePile.length;
     game.winnerId = winner.id;
     game.status = 'ENDED' as GameStatus;
     await battleLogRepository.append(game.id, logEntry('FORFEIT', reason));
-    await battleLogRepository.append(game.id, logEntry('RESOLVED', `${winner.name} wins the game!`));
+    await battleLogRepository.append(game.id, logEntry('RESOLVED', `${winner.name} wins the game by forfeit!`));
     await gameRepository.update(game);
     return publishAndReturn(game);
   }
@@ -293,6 +330,11 @@ export class GameService {
     if (game.status === 'PLAYING') {
       const opponent = game.players.find((p) => p.id !== userId);
       if (opponent) {
+        opponent.scorePile.push(...player.deck, ...opponent.deck);
+        player.deck = [];
+        opponent.deck = [];
+        player.pileCount = player.scorePile.length;
+        opponent.pileCount = opponent.scorePile.length;
         game.winnerId = opponent.id;
         game.status = 'FORFEITED' as GameStatus;
         await battleLogRepository.append(gameId, logEntry('FORFEIT', `${player.name} left the game. ${opponent.name} wins by forfeit.`));

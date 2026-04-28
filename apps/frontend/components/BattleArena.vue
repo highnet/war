@@ -3,7 +3,7 @@
     <template v-if="gameStore.game?.currentBattle">
       <div
         v-for="(bc, index) in visibleCards"
-        :key="bc.playerId + index"
+        :key="bc.playerId + index + keySuffix"
         class="flex flex-col items-center gap-2"
       >
         <div class="text-sm text-gray-400">
@@ -12,6 +12,7 @@
         <Card
           :card="bc.card"
           :face-down="bc.faceDown"
+          :animate="shouldAnimate"
         />
       </div>
     </template>
@@ -20,11 +21,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useGameStore } from '~/stores/game';
 import type { BattleCard } from '@war/types';
 
 const gameStore = useGameStore();
+
+const shouldAnimate = ref(false);
+const keySuffix = ref(0);
+
+watch(
+  () => gameStore.game?.currentBattle?.cards.length,
+  (newLen, oldLen) => {
+    if (newLen && newLen !== oldLen) {
+      shouldAnimate.value = true;
+      keySuffix.value++;
+      setTimeout(() => {
+        shouldAnimate.value = false;
+      }, 700);
+    }
+  }
+);
 
 const visibleCards = computed(() => {
   const battle = gameStore.game?.currentBattle;

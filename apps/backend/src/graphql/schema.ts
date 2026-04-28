@@ -34,6 +34,7 @@ export const schema = `
     name: String!
     deckSize: Int!
     pileCount: Int!
+    scoreCount: Int!
     isConnected: Boolean!
   }
 

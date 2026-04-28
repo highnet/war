@@ -43,6 +43,7 @@ export interface Player {
   name: string;
   deckSize: number;
   pileCount: number;
+  scoreCount: number;
   isConnected: boolean;
 }
 

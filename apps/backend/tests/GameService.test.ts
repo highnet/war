@@ -44,14 +44,13 @@ describe('GameService', () => {
     expect(updated.players).toHaveLength(1);
   });
 
-  it('starts a game and splits deck', async () => {
+  it('auto-starts when 2nd player joins', async () => {
     const service = new GameService();
     const game = await service.createGame('multiplayer');
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
-    await service.joinGame(game.id, bob.id);
-    const started = await service.startGame(game.id);
+    const started = await service.joinGame(game.id, bob.id);
     expect(started.status).toBe('PLAYING');
     expect(started.players[0].deck.length).toBe(26);
     expect(started.players[1].deck.length).toBe(26);
@@ -63,12 +62,14 @@ describe('GameService', () => {
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
-    await service.joinGame(game.id, bob.id);
-    let g = await service.startGame(game.id);
+    let g = await service.joinGame(game.id, bob.id);
     const firstPlayerId = g.activePlayerId!;
     g = await service.playTurn(game.id, firstPlayerId);
     expect(g.currentBattle).not.toBeNull();
     expect(g.currentBattle!.phase).toBe('RESOLVED');
+    // Winner gets cards in scorePile, not deck
+    const winner = g.players.find(p => p.id === g.currentBattle!.winnerId)!;
+    expect(winner.scorePile.length).toBe(2);
   });
 
   it('triggers war when cards are equal', async () => {
@@ -89,8 +90,7 @@ describe('GameService', () => {
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
-    await service.joinGame(game.id, bob.id);
-    let g = await service.startGame(game.id);
+    let g = await service.joinGame(game.id, bob.id);
     const firstPlayerId = g.activePlayerId!;
     g = await service.playTurn(game.id, firstPlayerId);
     expect(g.currentBattle!.phase).toBe('WAR');
@@ -113,8 +113,7 @@ describe('GameService', () => {
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
-    await service.joinGame(game.id, bob.id);
-    let g = await service.startGame(game.id);
+    let g = await service.joinGame(game.id, bob.id);
     const firstPlayerId = g.activePlayerId!;
 
     // First playTurn triggers war
@@ -125,6 +124,9 @@ describe('GameService', () => {
     g = await service.playTurn(game.id, firstPlayerId);
     expect(g.currentBattle!.phase).toBe('RESOLVED');
     expect(g.currentBattle!.winnerId).toBe(firstPlayerId);
+    // Winner gets 6 cards in scorePile (2 draw + 4 war)
+    const winner = g.players.find(p => p.id === firstPlayerId)!;
+    expect(winner.scorePile.length).toBe(6);
   });
 
   it('handles recursive war', async () => {
@@ -147,8 +149,7 @@ describe('GameService', () => {
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
-    await service.joinGame(game.id, bob.id);
-    let g = await service.startGame(game.id);
+    let g = await service.joinGame(game.id, bob.id);
     const firstPlayerId = g.activePlayerId!;
 
     // First playTurn: 10 vs 10 -> WAR
@@ -179,8 +180,7 @@ describe('GameService', () => {
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
-    await service.joinGame(game.id, bob.id);
-    let g = await service.startGame(game.id);
+    let g = await service.joinGame(game.id, bob.id);
     const firstPlayerId = g.activePlayerId!;
     const secondPlayerId = g.players.find(p => p.id !== firstPlayerId)!.id;
 
@@ -201,7 +201,6 @@ describe('GameService', () => {
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
     await service.joinGame(game.id, bob.id);
-    await service.startGame(game.id);
     const left = await service.leaveGame(game.id, alice.id);
     expect(left.status).toBe('FORFEITED');
     expect(left.winnerId).toBe(bob.id);

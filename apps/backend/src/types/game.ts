@@ -17,6 +17,7 @@ export interface PlayerEntity {
   name: string;
   deck: Card[];
   pileCount: number;
+  scorePile: Card[];
   isConnected: boolean;
   isAI: boolean;
 }

@@ -14,10 +14,14 @@
       <button
         @click="createUser"
         class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition"
-        :disabled="!name.trim()"
+        :disabled="!name.trim() || loading"
       >
-        Set Name
+        {{ loading ? 'Setting...' : 'Set Name' }}
       </button>
+    </div>
+
+    <div v-if="error" class="w-full max-w-md mb-4 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
+      {{ error }}
     </div>
 
     <div v-if="userStore.id" class="w-full max-w-md space-y-4">
@@ -26,13 +30,15 @@
         <div class="flex gap-4">
           <button
             @click="createGame('multiplayer')"
-            class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition"
+            class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition disabled:opacity-50"
+            :disabled="loading"
           >
             Multiplayer
           </button>
           <button
             @click="createGame('ai')"
-            class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded transition"
+            class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded transition disabled:opacity-50"
+            :disabled="loading"
           >
             vs AI
           </button>
@@ -55,7 +61,8 @@
             <button
               v-if="canJoin(game)"
               @click="joinGame(game.id)"
-              class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-3 rounded transition"
+              class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-3 rounded transition disabled:opacity-50"
+              :disabled="loading"
             >
               Join
             </button>
@@ -91,28 +98,51 @@ const userStore = useUserStore();
 const router = useRouter();
 const { query, mutate } = useGraphQL();
 const games = ref<Game[]>([]);
+const error = ref<string | null>(null);
+const loading = ref(false);
 
 async function createUser() {
   if (!name.value.trim()) return;
-  const res = await mutate('createUser', { name: name.value.trim() });
-  userStore.setUser(res.createUser);
-  localStorage.setItem('war-user', JSON.stringify(res.createUser));
-  await fetchGames();
+  loading.value = true;
+  error.value = null;
+  try {
+    const res = await mutate('createUser', { name: name.value.trim() });
+    userStore.setUser(res.createUser);
+    localStorage.setItem('war-user', JSON.stringify(res.createUser));
+    await fetchGames();
+  } catch (err: any) {
+    error.value = err.message || 'Failed to set name';
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function createGame(mode: string) {
-  const res = await mutate('createGame', { mode });
-  if (mode === 'ai') {
-    // AI game: join and start automatically
+  loading.value = true;
+  error.value = null;
+  try {
+    const res = await mutate('createGame', { mode });
+    // Creator always joins their game; backend auto-starts when 2nd player joins
     await mutate('joinGame', { gameId: res.createGame.id, userId: userStore.id });
-    await mutate('startGame', { gameId: res.createGame.id });
+    router.push(`/game/${res.createGame.id}`);
+  } catch (err: any) {
+    error.value = err.message || 'Failed to create game';
+  } finally {
+    loading.value = false;
   }
-  router.push(`/game/${res.createGame.id}`);
 }
 
 async function joinGame(gameId: string) {
-  await mutate('joinGame', { gameId, userId: userStore.id });
-  router.push(`/game/${gameId}`);
+  loading.value = true;
+  error.value = null;
+  try {
+    await mutate('joinGame', { gameId, userId: userStore.id });
+    router.push(`/game/${gameId}`);
+  } catch (err: any) {
+    error.value = err.message || 'Failed to join game';
+  } finally {
+    loading.value = false;
+  }
 }
 
 function goToGame(gameId: string) {
@@ -124,8 +154,12 @@ function canJoin(game: Game): boolean {
 }
 
 async function fetchGames() {
-  const res = await query('getGames');
-  games.value = res.getGames || [];
+  try {
+    const res = await query('getGames');
+    games.value = res.getGames || [];
+  } catch (err: any) {
+    error.value = err.message || 'Failed to load games';
+  }
 }
 
 onMounted(async () => {

@@ -5,6 +5,7 @@
       faceDown
         ? 'bg-blue-800 border-blue-600 text-transparent'
         : suitColor + ' bg-white border-gray-300',
+      animate ? 'animate-flip-in' : '',
     ]"
   >
     <template v-if="!faceDown">
@@ -23,6 +24,7 @@ import type { Card } from '@war/types';
 const props = defineProps<{
   card: Card;
   faceDown: boolean;
+  animate?: boolean;
 }>();
 
 const displayValue = computed(() => {
@@ -47,3 +49,23 @@ const suitColor = computed(() => {
   return 'text-gray-900';
 });
 </script>
+
+<style scoped>
+@keyframes flip-in {
+  0% {
+    transform: rotateY(90deg) scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: rotateY(0deg) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+}
+.animate-flip-in {
+  animation: flip-in 0.6s ease-out forwards;
+}
+</style>

@@ -12,6 +12,10 @@
         </div>
       </div>
     </div>
+    <div class="flex items-center gap-2 bg-gray-800 rounded-full px-3 py-1">
+      <span class="text-yellow-400 text-lg">★</span>
+      <span class="text-sm font-bold">{{ player?.scoreCount || 0 }}</span>
+    </div>
   </div>
 </template>
 
