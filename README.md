@@ -1,6 +1,6 @@
 # War Multiplayer
 
-A production-style fullstack monorepo implementation of the card game **War** with real-time multiplayer, AI opponents, and Redis-backed game state.
+A fullstack monorepo implementation of the card game **War** with real-time multiplayer, AI opponents, and Redis-backed game state.
 
 ## Features
 
