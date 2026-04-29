@@ -1,4 +1,4 @@
-app = "war-frontend"
+app = "highnet-war-frontend"
 primary_region = "iad"
 
 [build]
