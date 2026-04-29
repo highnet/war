@@ -1,4 +1,5 @@
-import { useRuntimeConfig } from '#app';
+declare function useRuntimeConfig(): { public: { apiUrl: string } };
+declare function $fetch<T>(url: string, opts?: Record<string, unknown>): Promise<T>;
 
 const QUERIES: Record<string, string> = {
   getGames: `
@@ -6,7 +7,7 @@ const QUERIES: Record<string, string> = {
       getGames {
         id status mode
         players { id name deckSize pileCount scoreCount isConnected isAI }
-        winnerId activePlayerId createdAt updatedAt
+        winnerId activePlayerId commitDeadline createdAt updatedAt
       }
     }
   `,
@@ -22,7 +23,23 @@ const QUERIES: Record<string, string> = {
         }
         winnerId
         logs { id type message timestamp }
-        activePlayerId createdAt updatedAt
+        activePlayerId commitDeadline createdAt updatedAt
+      }
+    }
+  `,
+  myActiveGame: `
+    query MyActiveGame($userId: ID!) {
+      myActiveGame(userId: $userId) {
+        id status mode
+        players { id name deckSize pileCount scoreCount isConnected isAI }
+        currentBattle {
+          phase
+          cards { playerId card { value suit } faceDown }
+          winnerId isWar
+        }
+        winnerId
+        logs { id type message timestamp }
+        activePlayerId commitDeadline createdAt updatedAt
       }
     }
   `,
@@ -30,7 +47,7 @@ const QUERIES: Record<string, string> = {
 
 const MUTATIONS: Record<string, string> = {
   createUser: `
-    mutation CreateUser($name: String!) {
+    mutation CreateUser($name: String) {
       createUser(name: $name) { id name isAI }
     }
   `,
@@ -82,7 +99,7 @@ const MUTATIONS: Record<string, string> = {
         }
         winnerId
         logs { id type message timestamp }
-        activePlayerId createdAt updatedAt
+        activePlayerId commitDeadline createdAt updatedAt
       }
     }
   `,
@@ -115,10 +132,10 @@ export function useGraphQL() {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    if (res.errors) {
-      throw new Error(res.errors[0].message);
+    if ((res as any).errors) {
+      throw new Error((res as any).errors[0].message);
     }
-    return res.data;
+    return (res as any).data;
   }
 
   return { query, mutate };

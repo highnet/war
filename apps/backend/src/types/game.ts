@@ -8,6 +8,7 @@ export interface GameEntity {
   currentBattle: CurrentBattle | null;
   winnerId: string | null;
   activePlayerId: string | null;
+  commitDeadline: string | null;
   createdAt: string;
   updatedAt: string;
 }

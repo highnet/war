@@ -1,19 +1,26 @@
 <template>
-  <div
-    class="w-20 h-28 rounded-lg border-2 flex items-center justify-center text-2xl font-bold select-none transition-transform"
-    :class="[
-      faceDown
-        ? 'bg-blue-800 border-blue-600 text-transparent'
-        : suitColor + ' bg-white border-gray-300',
-      animate ? 'animate-flip-in' : '',
-    ]"
-  >
-    <template v-if="!faceDown">
-      {{ displayValue }}{{ suitSymbol }}
-    </template>
-    <template v-else>
-      <div class="w-12 h-16 bg-blue-700 rounded" />
-    </template>
+  <div class="perspective w-16 h-[5.6rem] sm:w-20 sm:h-28">
+    <div
+      class="relative w-full h-full card-flipper preserve-3d"
+      :class="{ 'rotate-y-180': !faceDown }"
+    >
+      <!-- Face-down side -->
+      <div
+        class="absolute inset-0 backface-hidden rounded-lg border-2 flex items-center justify-center bg-blue-800 border-blue-600"
+      >
+        <div class="w-8 h-12 sm:w-12 sm:h-16 bg-blue-700 rounded" />
+      </div>
+
+      <!-- Face-up side -->
+      <div
+        class="absolute inset-0 backface-hidden rounded-lg border-2 bg-white border-gray-300 flex items-center justify-center rotate-y-180"
+        :class="[suitColor, winner ? 'ring-4 ring-green-400 shadow-lg shadow-green-500/50 scale-110 z-10' : '', loser ? 'opacity-60 grayscale' : '']"
+      >
+        <div class="text-xl sm:text-2xl font-bold">
+          {{ displayValue }}{{ suitSymbol }}
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -24,7 +31,8 @@ import type { Card } from '@war/types';
 const props = defineProps<{
   card: Card;
   faceDown: boolean;
-  animate?: boolean;
+  winner?: boolean;
+  loser?: boolean;
 }>();
 
 const displayValue = computed(() => {
@@ -34,10 +42,10 @@ const displayValue = computed(() => {
 
 const suitSymbol = computed(() => {
   const map: Record<string, string> = {
-    HEARTS: '♥',
-    DIAMONDS: '♦',
-    CLUBS: '♣',
-    SPADES: '♠',
+    HEARTS: '\u2665',
+    DIAMONDS: '\u2666',
+    CLUBS: '\u2663',
+    SPADES: '\u2660',
   };
   return map[props.card.suit] || props.card.suit;
 });
@@ -51,21 +59,20 @@ const suitColor = computed(() => {
 </script>
 
 <style scoped>
-@keyframes flip-in {
-  0% {
-    transform: rotateY(90deg) scale(0.8);
-    opacity: 0;
-  }
-  50% {
-    transform: rotateY(0deg) scale(1.05);
-    opacity: 1;
-  }
-  100% {
-    transform: rotateY(0deg) scale(1);
-    opacity: 1;
-  }
+.perspective {
+  perspective: 1000px;
 }
-.animate-flip-in {
-  animation: flip-in 0.6s ease-out forwards;
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+.card-flipper {
+  transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
 }
 </style>

@@ -2,16 +2,16 @@
   <div class="h-10 flex items-center justify-center">
     <Transition name="bounce">
       <div
-        v-if="gameStore.warActive"
+        v-if="gameStore.warActive && !gameStore.isRevealing && !gameStore.battleResolved"
         class="text-3xl font-extrabold text-yellow-400 animate-pulse"
       >
         ⚔️ WAR! ⚔️
       </div>
       <div
-        v-else-if="gameStore.battleResolved"
-        class="text-xl font-semibold text-green-400"
+        v-else-if="gameStore.isRevealing"
+        class="text-xl font-semibold text-blue-300 animate-pulse"
       >
-        🏆 Battle Resolved
+        Revealing cards...
       </div>
       <div v-else class="text-sm text-gray-500">—</div>
     </Transition>

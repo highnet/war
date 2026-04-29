@@ -3,12 +3,14 @@
     <button
       @click="playTurn"
       :disabled="!canPlay"
-      class="px-8 py-3 rounded-lg font-bold text-lg transition"
+      class="px-6 sm:px-8 py-2 sm:py-3 rounded-lg font-bold text-base sm:text-lg transition min-w-[160px] sm:min-w-[180px]"
       :class="buttonClass"
     >
       <span v-if="loading">Playing...</span>
       <span v-else-if="gameStore.gameEnded">Game Over</span>
-      <span v-else-if="!gameStore.isMyTurn">Opponent's Turn</span>
+      <span v-else-if="gameStore.isRevealing">Revealing...</span>
+      <span v-else-if="gameStore.hasCommitted">Waiting for opponent...</span>
+      <span v-else-if="gameStore.warActive">Play War Card</span>
       <span v-else>Play Turn</span>
     </button>
     <div v-if="error" class="text-sm text-red-400 max-w-xs text-center">
@@ -30,12 +32,14 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 
 const canPlay = computed(() => {
-  return gameStore.isMyTurn && !gameStore.gameEnded && !loading.value;
+  return gameStore.canCommit && !gameStore.gameEnded && !loading.value;
 });
 
 const buttonClass = computed(() => {
   if (gameStore.gameEnded) return 'bg-gray-700 text-gray-400 cursor-not-allowed';
-  if (gameStore.warActive) return canPlay.value ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : 'bg-gray-700 text-gray-400 cursor-not-allowed';
+  if (gameStore.isRevealing) return 'bg-yellow-700 text-yellow-200 cursor-not-allowed';
+  if (gameStore.hasCommitted) return 'bg-gray-700 text-gray-400 cursor-not-allowed';
+  if (gameStore.warActive) return canPlay.value ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-gray-700 text-gray-400 cursor-not-allowed';
   return canPlay.value ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-700 text-gray-400 cursor-not-allowed';
 });
 

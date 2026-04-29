@@ -8,6 +8,7 @@ export const schema = `
 
   enum BattlePhase {
     DRAW
+    REVEAL
     WAR
     RESOLVED
   }
@@ -62,6 +63,7 @@ export const schema = `
     winnerId: ID
     logs: [GameLogEntry!]!
     activePlayerId: ID
+    commitDeadline: String
     createdAt: String!
     updatedAt: String!
   }
@@ -69,10 +71,11 @@ export const schema = `
   type Query {
     getGames: [Game!]!
     getGame(gameId: ID!): Game
+    myActiveGame(userId: ID!): Game
   }
 
   type Mutation {
-    createUser(name: String!): User!
+    createUser(name: String): User!
     createGame(mode: String!): Game!
     findOrCreateGame(mode: String!, userId: ID!): Game!
     joinGame(gameId: ID!, userId: ID!): Game!

@@ -20,6 +20,16 @@ function mockDeckService(deckA: import('@war/types').Card[], deckB: import('@war
   };
 }
 
+const FAST = { revealDelayMs: 50, clearDelayMs: 200, forfeitDelayMs: 50 };
+
+async function flushReveal() {
+  await new Promise((r) => setTimeout(r, 120));
+}
+
+async function flushClear() {
+  await new Promise((r) => setTimeout(r, 350));
+}
+
 describe('GameService', () => {
   beforeEach(async () => {
     const redis = redisStore.getClient();
@@ -65,26 +75,45 @@ describe('GameService', () => {
       { value: 9, suit: 'DIAMONDS' as const },
       { value: 4, suit: 'HEARTS' as const },
     ];
-    const service = new GameService(mockDeckService(deckA, deckB));
+    const service = new GameService(mockDeckService(deckA, deckB), FAST);
     const game = await service.createGame('multiplayer');
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
-    let g = await service.joinGame(game.id, bob.id);
-    const firstPlayerId = g.activePlayerId!;
-    g = await service.playTurn(game.id, firstPlayerId);
-    expect(g.currentBattle).not.toBeNull();
+    await service.joinGame(game.id, bob.id);
+
+    // Both commit simultaneously
+    let g = await service.playTurn(game.id, alice.id);
+    expect(g.currentBattle!.phase).toBe('DRAW');
+    expect(g.currentBattle!.cards).toHaveLength(1);
+    expect(g.currentBattle!.cards[0].faceDown).toBe(true);
+
+    g = await service.playTurn(game.id, bob.id);
+    expect(g.currentBattle!.phase).toBe('REVEAL');
+    expect(g.currentBattle!.cards).toHaveLength(2);
+    expect(g.currentBattle!.cards[0].faceDown).toBe(false);
+    expect(g.currentBattle!.cards[1].faceDown).toBe(false);
+
+    // Wait for auto-resolve
+    await flushReveal();
+    g = (await gameRepository.getById(game.id))!;
     expect(g.currentBattle!.phase).toBe('RESOLVED');
-    // Winner gets cards in scorePile, not deck
-    const winner = g.players.find(p => p.id === g.currentBattle!.winnerId)!;
+    expect(g.currentBattle!.winnerId).toBe(alice.id);
+
+    const winner = g.players.find((p) => p.id === alice.id)!;
     expect(winner.scorePile.length).toBe(2);
+
+    // Wait for auto-clear
+    await flushClear();
+    g = (await gameRepository.getById(game.id))!;
+    expect(g.currentBattle).toBeNull();
   });
 
   it('triggers war when cards are equal', async () => {
     const deckA = [
       { value: 10, suit: 'HEARTS' as const },
       { value: 5, suit: 'CLUBS' as const },
-      { value: 3, suit: 'DIAMONDS' as const },
+      { value: 8, suit: 'DIAMONDS' as const },
       { value: 2, suit: 'SPADES' as const },
     ];
     const deckB = [
@@ -93,47 +122,89 @@ describe('GameService', () => {
       { value: 3, suit: 'CLUBS' as const },
       { value: 2, suit: 'DIAMONDS' as const },
     ];
-    const service = new GameService(mockDeckService(deckA, deckB));
+    const service = new GameService(mockDeckService(deckA, deckB), FAST);
     const game = await service.createGame('multiplayer');
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
-    let g = await service.joinGame(game.id, bob.id);
-    const firstPlayerId = g.activePlayerId!;
-    g = await service.playTurn(game.id, firstPlayerId);
+    await service.joinGame(game.id, bob.id);
+
+    // Both commit draw
+    let g = await service.playTurn(game.id, alice.id);
+    g = await service.playTurn(game.id, bob.id);
+    expect(g.currentBattle!.phase).toBe('REVEAL');
+
+    // Wait for reveal -> WAR
+    await flushReveal();
+    g = (await gameRepository.getById(game.id))!;
     expect(g.currentBattle!.phase).toBe('WAR');
     expect(g.currentBattle!.isWar).toBe(true);
+
+    // Both commit war face-down
+    g = await service.playTurn(game.id, alice.id);
+    expect(g.currentBattle!.phase).toBe('WAR');
+    g = await service.playTurn(game.id, bob.id);
+    expect(g.currentBattle!.cards).toHaveLength(4);
+    expect(g.currentBattle!.phase).toBe('WAR'); // stays WAR, no reveal for face-down
+
+    // Both commit war face-up
+    g = await service.playTurn(game.id, alice.id);
+    expect(g.currentBattle!.phase).toBe('WAR');
+    g = await service.playTurn(game.id, bob.id);
+    expect(g.currentBattle!.phase).toBe('REVEAL');
+    // Last two cards (war face-up) are flipped
+    expect(g.currentBattle!.cards[2].faceDown).toBe(true);  // war face-down stays hidden
+    expect(g.currentBattle!.cards[3].faceDown).toBe(true);  // war face-down stays hidden
+    expect(g.currentBattle!.cards[4].faceDown).toBe(false); // war face-up flipped
+    expect(g.currentBattle!.cards[5].faceDown).toBe(false); // war face-up flipped
+
+    // Wait for war resolve
+    await flushReveal();
+    g = (await gameRepository.getById(game.id))!;
+    expect(g.currentBattle!.phase).toBe('RESOLVED');
   });
 
   it('resolves war step-by-step', async () => {
     const deckA = [
-      { value: 10, suit: 'HEARTS' as const },   // draw
-      { value: 5, suit: 'CLUBS' as const },     // war face-down
-      { value: 8, suit: 'DIAMONDS' as const },  // war face-up (wins)
+      { value: 10, suit: 'HEARTS' as const },
+      { value: 5, suit: 'CLUBS' as const },
+      { value: 8, suit: 'DIAMONDS' as const },
     ];
     const deckB = [
-      { value: 10, suit: 'DIAMONDS' as const },  // draw
-      { value: 4, suit: 'HEARTS' as const },     // war face-down
-      { value: 3, suit: 'CLUBS' as const },      // war face-up (loses)
+      { value: 10, suit: 'DIAMONDS' as const },
+      { value: 4, suit: 'HEARTS' as const },
+      { value: 3, suit: 'CLUBS' as const },
     ];
-    const service = new GameService(mockDeckService(deckA, deckB));
+    const service = new GameService(mockDeckService(deckA, deckB), FAST);
     const game = await service.createGame('multiplayer');
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
-    let g = await service.joinGame(game.id, bob.id);
-    const firstPlayerId = g.activePlayerId!;
+    await service.joinGame(game.id, bob.id);
 
-    // First playTurn triggers war
-    g = await service.playTurn(game.id, firstPlayerId);
+    // Draw
+    await service.playTurn(game.id, alice.id);
+    await service.playTurn(game.id, bob.id);
+    await flushReveal();
+    let g = (await gameRepository.getById(game.id))!;
     expect(g.currentBattle!.phase).toBe('WAR');
 
-    // Second playTurn resolves war (same player because activePlayerId doesn't change during war)
-    g = await service.playTurn(game.id, firstPlayerId);
+    // War face-down
+    await service.playTurn(game.id, alice.id);
+    await service.playTurn(game.id, bob.id);
+
+    // War face-up
+    await service.playTurn(game.id, alice.id);
+    await service.playTurn(game.id, bob.id);
+    g = (await gameRepository.getById(game.id))!;
+    expect(g.currentBattle!.phase).toBe('REVEAL');
+
+    await flushReveal();
+    g = (await gameRepository.getById(game.id))!;
     expect(g.currentBattle!.phase).toBe('RESOLVED');
-    expect(g.currentBattle!.winnerId).toBe(firstPlayerId);
-    // Winner gets 6 cards in scorePile (2 draw + 4 war)
-    const winner = g.players.find(p => p.id === firstPlayerId)!;
+    expect(g.currentBattle!.winnerId).toBe(alice.id);
+
+    const winner = g.players.find((p) => p.id === alice.id)!;
     expect(winner.scorePile.length).toBe(6);
   });
 
@@ -152,26 +223,42 @@ describe('GameService', () => {
       { value: 2, suit: 'DIAMONDS' as const },
       { value: 3, suit: 'SPADES' as const },
     ];
-    const service = new GameService(mockDeckService(deckA, deckB));
+    const service = new GameService(mockDeckService(deckA, deckB), FAST);
     const game = await service.createGame('multiplayer');
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
-    let g = await service.joinGame(game.id, bob.id);
-    const firstPlayerId = g.activePlayerId!;
+    await service.joinGame(game.id, bob.id);
 
-    // First playTurn: 10 vs 10 -> WAR
-    g = await service.playTurn(game.id, firstPlayerId);
+    // Draw -> WAR
+    await service.playTurn(game.id, alice.id);
+    await service.playTurn(game.id, bob.id);
+    await flushReveal();
+    let g = (await gameRepository.getById(game.id))!;
     expect(g.currentBattle!.phase).toBe('WAR');
 
-    // Second playTurn: 7 vs 7 -> WAR continues (recursive)
-    g = await service.playTurn(game.id, firstPlayerId);
+    // War round 1 face-down
+    await service.playTurn(game.id, alice.id);
+    await service.playTurn(game.id, bob.id);
+
+    // War round 1 face-up -> tie -> WAR continues
+    await service.playTurn(game.id, alice.id);
+    await service.playTurn(game.id, bob.id);
+    await flushReveal();
+    g = (await gameRepository.getById(game.id))!;
     expect(g.currentBattle!.phase).toBe('WAR');
 
-    // Third playTurn: 14 vs 3 -> RESOLVED
-    g = await service.playTurn(game.id, firstPlayerId);
+    // War round 2 face-down
+    await service.playTurn(game.id, alice.id);
+    await service.playTurn(game.id, bob.id);
+
+    // War round 2 face-up -> RESOLVED
+    await service.playTurn(game.id, alice.id);
+    await service.playTurn(game.id, bob.id);
+    await flushReveal();
+    g = (await gameRepository.getById(game.id))!;
     expect(g.currentBattle!.phase).toBe('RESOLVED');
-    expect(g.currentBattle!.winnerId).toBe(firstPlayerId);
+    expect(g.currentBattle!.winnerId).toBe(alice.id);
   });
 
   it('ends game when player has insufficient cards for war', async () => {
@@ -183,23 +270,24 @@ describe('GameService', () => {
       { value: 5, suit: 'CLUBS' as const },
       { value: 3, suit: 'SPADES' as const },
     ];
-    const service = new GameService(mockDeckService(deckA, deckB));
+    const service = new GameService(mockDeckService(deckA, deckB), FAST);
     const game = await service.createGame('multiplayer');
     const alice = await createUser('Alice');
     const bob = await createUser('Bob');
     await service.joinGame(game.id, alice.id);
-    let g = await service.joinGame(game.id, bob.id);
-    const firstPlayerId = g.activePlayerId!;
-    const secondPlayerId = g.players.find(p => p.id !== firstPlayerId)!.id;
+    await service.joinGame(game.id, bob.id);
 
-    // First playTurn triggers war
-    g = await service.playTurn(game.id, firstPlayerId);
+    // Draw -> WAR
+    await service.playTurn(game.id, alice.id);
+    await service.playTurn(game.id, bob.id);
+    await flushReveal();
+    let g = (await gameRepository.getById(game.id))!;
     expect(g.currentBattle!.phase).toBe('WAR');
 
-    // Second playTurn resolves war step, but first player only has 0 cards left -> insufficient
-    g = await service.playTurn(game.id, firstPlayerId);
+    // Alice has 0 cards left. Alice tries to commit war face-down -> forfeit
+    g = await service.playTurn(game.id, alice.id);
     expect(g.status).toBe('ENDED');
-    expect(g.winnerId).toBe(secondPlayerId);
+    expect(g.winnerId).toBe(bob.id);
   });
 
   it('forfeits on leave during PLAYING', async () => {
@@ -210,7 +298,8 @@ describe('GameService', () => {
     await service.joinGame(game.id, alice.id);
     await service.joinGame(game.id, bob.id);
     const left = await service.leaveGame(game.id, alice.id);
-    expect(left.status).toBe('FORFEITED');
-    expect(left.winnerId).toBe(bob.id);
+    expect(left).not.toBeNull();
+    expect(left!.status).toBe('FORFEITED');
+    expect(left!.winnerId).toBe(bob.id);
   });
 });

@@ -14,6 +14,7 @@ export enum GameStatus {
 
 export enum BattlePhase {
   DRAW = 'DRAW',
+  REVEAL = 'REVEAL',
   WAR = 'WAR',
   RESOLVED = 'RESOLVED',
 }
@@ -56,6 +57,7 @@ export interface Game {
   winnerId: string | null;
   logs: BattleLogEntry[];
   activePlayerId: string | null;
+  commitDeadline: string | null;
   createdAt: string;
   updatedAt: string;
 }

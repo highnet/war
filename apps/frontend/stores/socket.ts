@@ -43,6 +43,7 @@ export const useSocketStore = defineStore('socket', () => {
                 name
                 deckSize
                 pileCount
+                scoreCount
                 isConnected
                 isAI
               }
@@ -67,6 +68,7 @@ export const useSocketStore = defineStore('socket', () => {
                 timestamp
               }
               activePlayerId
+              commitDeadline
               createdAt
               updatedAt
             }

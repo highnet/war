@@ -6,13 +6,15 @@ import { EventEmitter } from 'events';
 class RedisPubSub {
   private publisher = redisStore.getClient();
   private subscriber = redisStore.getClient().duplicate({ enableReadyCheck: false });
-  private emitters = new Map<string, EventEmitter>();
+  private emitters = new Map<string, EventEmitter[]>();
 
   constructor() {
     this.subscriber.on('message', (channel, message) => {
-      const emitter = this.emitters.get(channel);
-      if (emitter) {
-        emitter.emit('message', JSON.parse(message));
+      const emitters = this.emitters.get(channel);
+      if (emitters) {
+        for (const emitter of emitters) {
+          emitter.emit('message', JSON.parse(message));
+        }
       }
     });
   }
@@ -20,7 +22,10 @@ class RedisPubSub {
   async subscribe(topic: string): Promise<AsyncIterableIterator<unknown>> {
     await this.subscriber.subscribe(topic);
     const emitter = new EventEmitter();
-    this.emitters.set(topic, emitter);
+    const list = this.emitters.get(topic) || [];
+    list.push(emitter);
+    this.emitters.set(topic, list);
+    const pubSub = this;
 
     const asyncIterator: AsyncIterableIterator<unknown> = {
       [Symbol.asyncIterator]() {
@@ -34,6 +39,16 @@ class RedisPubSub {
         });
       },
       async return() {
+        const current = pubSub.emitters.get(topic);
+        if (current) {
+          const idx = current.indexOf(emitter);
+          if (idx !== -1) {
+            current.splice(idx, 1);
+            if (current.length === 0) {
+              pubSub.emitters.delete(topic);
+            }
+          }
+        }
         return { value: undefined, done: true };
       },
       async throw(err) {

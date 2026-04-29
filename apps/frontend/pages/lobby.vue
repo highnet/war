@@ -1,43 +1,33 @@
 <template>
   <div class="min-h-screen flex flex-col items-center justify-center p-4">
-    <h1 class="text-4xl font-bold mb-8">War Multiplayer</h1>
+    <h1 class="text-3xl sm:text-4xl font-bold mb-6 sm:mb-8">War Multiplayer</h1>
 
-    <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md mb-6">
-      <h2 class="text-xl font-semibold mb-4">Enter Your Name</h2>
-      <input
-        v-model="name"
-        type="text"
-        placeholder="Your name"
-        class="w-full px-4 py-2 rounded bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        @keyup.enter="createUser"
-      />
-      <button
-        @click="createUser"
-        class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition"
-        :disabled="!name.trim() || loading"
-      >
-        {{ loading ? 'Setting...' : 'Set Name' }}
-      </button>
+    <div v-if="!userStore.id" class="w-full max-w-md mb-6 text-center">
+      <div class="text-gray-400 animate-pulse text-sm sm:text-base">Summoning your warrior...</div>
     </div>
 
-    <div v-if="error" class="w-full max-w-md mb-4 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
+    <div v-if="error" class="w-full max-w-md mb-4 p-3 sm:p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-sm sm:text-base">
       {{ error }}
     </div>
 
-    <div v-if="userStore.id" class="w-full max-w-md space-y-4">
-      <div class="bg-gray-800 rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">Play</h2>
-        <div class="flex gap-4">
+    <div v-if="userStore.id" class="w-full max-w-md space-y-3 sm:space-y-4">
+      <div class="bg-gray-800 rounded-lg p-4 sm:p-6 text-center">
+        <div class="text-xl sm:text-2xl font-bold text-white mb-1">{{ userStore.name }}</div>
+        <div class="text-xs sm:text-sm text-gray-400">Ready for battle</div>
+      </div>
+
+      <div class="bg-gray-800 rounded-lg p-4 sm:p-6">
+        <div class="flex gap-3 sm:gap-4">
           <button
             @click="findGame('multiplayer')"
-            class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition disabled:opacity-50"
+            class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 sm:py-3 px-3 sm:px-4 rounded transition disabled:opacity-50 text-sm sm:text-base"
             :disabled="loading"
           >
             {{ loading && pendingMode === 'multiplayer' ? 'Matching...' : 'Multiplayer' }}
           </button>
           <button
             @click="findGame('ai')"
-            class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded transition disabled:opacity-50"
+            class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 sm:py-3 px-3 sm:px-4 rounded transition disabled:opacity-50 text-sm sm:text-base"
             :disabled="loading"
           >
             vs AI
@@ -45,41 +35,17 @@
         </div>
       </div>
 
-      <div class="bg-gray-800 rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">Open Games</h2>
-        <div v-if="games.length === 0" class="text-gray-400">No open games</div>
-        <div v-else class="space-y-2">
-          <div
-            v-for="game in games"
-            :key="game.id"
-            class="flex items-center justify-between bg-gray-700 rounded p-3"
-          >
-            <div>
-              <div class="font-medium">{{ game.mode }} — {{ game.status }}</div>
-              <div class="text-sm text-gray-400">{{ game.players.length }}/2 players</div>
-            </div>
-            <button
-              v-if="canJoin(game)"
-              @click="joinGame(game.id)"
-              class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-3 rounded transition disabled:opacity-50"
-              :disabled="loading"
-            >
-              Join
-            </button>
-            <button
-              v-else
-              @click="goToGame(game.id)"
-              class="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-3 rounded transition"
-            >
-              View
-            </button>
-          </div>
+      <div v-if="activeGame" class="bg-gray-800 rounded-lg p-4 sm:p-6 text-center">
+        <div class="text-xs sm:text-sm text-gray-400 mb-2">You have an active game</div>
+        <div class="text-base sm:text-lg font-semibold text-white mb-3">
+          vs {{ activeGame.players.find((p) => p.id !== userStore.id)?.name || 'Opponent' }}
+          <span class="text-xs sm:text-sm text-gray-400">({{ activeGame.mode === 'ai' ? 'AI' : 'Multiplayer' }})</span>
         </div>
         <button
-          @click="fetchGames"
-          class="mt-4 w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded transition"
+          @click="reconnect"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded transition text-sm sm:text-base"
         >
-          Refresh
+          Reconnect to Game
         </button>
       </div>
     </div>
@@ -93,32 +59,30 @@ import { useUserStore } from '~/stores/user';
 import { useGraphQL } from '~/composables/useGraphQL';
 import type { Game } from '@war/types';
 
-const name = ref('');
 const userStore = useUserStore();
 const router = useRouter();
 const { query, mutate } = useGraphQL();
-const games = ref<Game[]>([]);
+const activeGame = ref<Game | null>(null);
 const error = ref<string | null>(null);
 const loading = ref(false);
 const pendingMode = ref<string | null>(null);
 
 async function createUser() {
-  if (!name.value.trim()) return;
   loading.value = true;
   error.value = null;
   try {
-    const res = await mutate('createUser', { name: name.value.trim() });
+    const res = await mutate('createUser', {});
     userStore.setUser(res.createUser);
-    localStorage.setItem('war-user', JSON.stringify(res.createUser));
-    await fetchGames();
+    localStorage.setItem('war-user-v2', JSON.stringify(res.createUser));
   } catch (err: any) {
-    error.value = err.message || 'Failed to set name';
+    error.value = err.message || 'Failed to create warrior';
   } finally {
     loading.value = false;
   }
 }
 
 async function findGame(mode: string) {
+  if (!userStore.id) return;
   loading.value = true;
   pendingMode.value = mode;
   error.value = null;
@@ -133,45 +97,41 @@ async function findGame(mode: string) {
   }
 }
 
-async function joinGame(gameId: string) {
-  loading.value = true;
-  error.value = null;
-  try {
-    await mutate('joinGame', { gameId, userId: userStore.id });
-    router.push(`/game/${gameId}`);
-  } catch (err: any) {
-    error.value = err.message || 'Failed to join game';
-  } finally {
-    loading.value = false;
-  }
-}
-
-function goToGame(gameId: string) {
-  router.push(`/game/${gameId}`);
-}
-
-function canJoin(game: Game): boolean {
-  return game.status === 'WAITING' && game.players.length < 2 && !game.players.some((p) => p.id === userStore.id);
-}
-
-async function fetchGames() {
-  try {
-    const res = await query('getGames');
-    games.value = res.getGames || [];
-  } catch (err: any) {
-    error.value = err.message || 'Failed to load games';
+function reconnect() {
+  if (activeGame.value) {
+    router.push(`/game/${activeGame.value.id}`);
   }
 }
 
 onMounted(async () => {
-  const saved = localStorage.getItem('war-user');
+  // Migrate away from old localStorage that may contain manual names like h1/h2
+  const legacy = localStorage.getItem('war-user');
+  if (legacy) {
+    localStorage.removeItem('war-user');
+  }
+
+  const saved = localStorage.getItem('war-user-v2');
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
       userStore.setUser(parsed);
-      await fetchGames();
     } catch {
-      localStorage.removeItem('war-user');
+      localStorage.removeItem('war-user-v2');
+      await createUser();
+    }
+  } else {
+    await createUser();
+  }
+
+  // Check if user is already in an active game
+  if (userStore.id) {
+    try {
+      const res = await query('myActiveGame', { userId: userStore.id });
+      if (res.myActiveGame) {
+        activeGame.value = res.myActiveGame;
+      }
+    } catch {
+      // ignore query errors
     }
   }
 });

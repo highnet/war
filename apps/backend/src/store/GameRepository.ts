@@ -3,6 +3,7 @@ import type { GameEntity, PlayerEntity, CurrentBattle } from '../types/game.js';
 import type { GameStatus, BattleLogEntry } from '@war/types';
 
 const TTL_SECONDS = 1800; // 30 minutes
+const STALE_WAITING_MS = 2 * 60 * 1000; // 2 minutes
 
 export class GameRepository {
   private redis = redisStore.getClient();
@@ -21,6 +22,7 @@ export class GameRepository {
       currentBattle: JSON.stringify(game.currentBattle),
       winnerId: game.winnerId ?? '',
       activePlayerId: game.activePlayerId ?? '',
+      commitDeadline: game.commitDeadline ?? '',
       createdAt: game.createdAt,
       updatedAt: game.updatedAt,
     });
@@ -45,6 +47,7 @@ export class GameRepository {
       currentBattle: JSON.stringify(game.currentBattle),
       winnerId: game.winnerId ?? '',
       activePlayerId: game.activePlayerId ?? '',
+      commitDeadline: game.commitDeadline ?? '',
       createdAt: game.createdAt,
       updatedAt: game.updatedAt,
     });
@@ -54,13 +57,37 @@ export class GameRepository {
   async getAll(): Promise<GameEntity[]> {
     const keys = await this.redis.keys('game:*');
     const games: GameEntity[] = [];
+    const staleIds: string[] = [];
+    const now = Date.now();
+
     for (const key of keys) {
       if (key.includes(':logs')) continue;
       const data = await this.redis.hgetall(key);
       if (data && Object.keys(data).length > 0) {
-        games.push(this.deserialize(data));
+        const game = this.deserialize(data);
+        // Stale WAITING games (older than 5 min) are auto-deleted
+        if (game.status === 'WAITING' && now - new Date(game.createdAt).getTime() > STALE_WAITING_MS) {
+          staleIds.push(game.id);
+          continue;
+        }
+        // AI games in WAITING are always stale — they should auto-start immediately
+        if (game.status === 'WAITING' && game.mode === 'ai') {
+          staleIds.push(game.id);
+          continue;
+        }
+        // Ghost lobbies where the host disconnected are useless
+        if (game.status === 'WAITING' && game.players.some((p) => !p.isConnected)) {
+          staleIds.push(game.id);
+          continue;
+        }
+        games.push(game);
       }
     }
+
+    for (const id of staleIds) {
+      await this.delete(id);
+    }
+
     return games;
   }
 
@@ -78,6 +105,7 @@ export class GameRepository {
       currentBattle: data.currentBattle ? JSON.parse(data.currentBattle) as CurrentBattle : null,
       winnerId: data.winnerId || null,
       activePlayerId: data.activePlayerId || null,
+      commitDeadline: data.commitDeadline || null,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     };
