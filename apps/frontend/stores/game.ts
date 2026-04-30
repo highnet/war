@@ -9,17 +9,17 @@ export const useGameStore = defineStore('game', () => {
   const isClearing = ref(false);
   let clearingTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // Stable user ID — set once on game load, never re-read from localStorage
+  const currentUserId = ref<string>('');
+
   const myPlayer = computed<Player | null>(() => {
-    if (!game.value) return null;
-    const userId = localStorage.getItem('war-user-v2');
-    if (!userId) return null;
-    const parsed = JSON.parse(userId);
-    return game.value.players.find((p) => p.id === parsed.id) || null;
+    if (!game.value || !currentUserId.value) return null;
+    return game.value.players.find((p) => p.id === currentUserId.value) || null;
   });
 
   const opponentPlayer = computed<Player | null>(() => {
-    if (!game.value) return null;
-    return game.value.players.find((p) => p.id !== myPlayer.value?.id) || null;
+    if (!game.value || !currentUserId.value) return null;
+    return game.value.players.find((p) => p.id !== currentUserId.value) || null;
   });
 
   const warActive = computed(() => {
@@ -52,29 +52,24 @@ export const useGameStore = defineStore('game', () => {
   const canCommit = computed(() => {
     if (!game.value || gameEnded.value) return false;
     if (isClearing.value) return false;
-    const userId = localStorage.getItem('war-user-v2');
-    if (!userId) return false;
-    const parsed = JSON.parse(userId);
+    if (!currentUserId.value) return false;
     const battle = game.value.currentBattle;
     if (battle?.phase === 'REVEAL') return false;
     if (battle?.phase === 'RESOLVED') return false; // wait for clear animation
     if (!battle) return true;
     // Check if player already committed for current step
-    const myCount = battle.cards.filter((c) => c.playerId === parsed.id).length;
-    const opponent = game.value.players.find((p) => p.id !== parsed.id);
+    const myCount = battle.cards.filter((c) => c.playerId === currentUserId.value).length;
+    const opponent = game.value.players.find((p) => p.id !== currentUserId.value);
     const theirCount = opponent ? battle.cards.filter((c) => c.playerId === opponent.id).length : 0;
     return myCount <= theirCount;
   });
 
   const hasCommitted = computed(() => {
-    if (!game.value) return false;
-    const userId = localStorage.getItem('war-user-v2');
-    if (!userId) return false;
-    const parsed = JSON.parse(userId);
+    if (!game.value || !currentUserId.value) return false;
     const battle = game.value.currentBattle;
     if (!battle || battle.phase === 'RESOLVED') return false;
-    const myCount = battle.cards.filter((c) => c.playerId === parsed.id).length;
-    const opponent = game.value.players.find((p) => p.id !== parsed.id);
+    const myCount = battle.cards.filter((c) => c.playerId === currentUserId.value).length;
+    const opponent = game.value.players.find((p) => p.id !== currentUserId.value);
     const theirCount = opponent ? battle.cards.filter((c) => c.playerId === opponent.id).length : 0;
     return myCount > theirCount;
   });
@@ -86,6 +81,10 @@ export const useGameStore = defineStore('game', () => {
 
   function setGame(newGame: Game) {
     game.value = newGame;
+  }
+
+  function setCurrentUserId(id: string) {
+    currentUserId.value = id;
   }
 
   function setLoading(val: boolean) {
@@ -101,6 +100,7 @@ export const useGameStore = defineStore('game', () => {
     loading,
     error,
     isClearing,
+    currentUserId,
     myPlayer,
     opponentPlayer,
     warActive,
@@ -111,6 +111,7 @@ export const useGameStore = defineStore('game', () => {
     hasCommitted,
     winnerName,
     setGame,
+    setCurrentUserId,
     setLoading,
     setError,
   };

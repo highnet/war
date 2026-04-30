@@ -33,7 +33,9 @@ onMounted(async () => {
   const savedUser = localStorage.getItem('war-user-v2');
   if (savedUser) {
     try {
-      userStore.setUser(JSON.parse(savedUser));
+      const parsed = JSON.parse(savedUser);
+      userStore.setUser(parsed);
+      gameStore.setCurrentUserId(parsed.id);
     } catch {
       localStorage.removeItem('war-user-v2');
     }

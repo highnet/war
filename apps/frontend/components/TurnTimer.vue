@@ -1,6 +1,10 @@
 <template>
-  <div class="flex flex-col items-center gap-1">
-    <div v-if="showTimer" class="relative w-12 h-12">
+  <!-- Fixed-height container prevents layout shifts -->
+  <div class="flex flex-col items-center gap-1 min-h-[4.5rem]">
+    <div
+      class="relative w-12 h-12 transition-opacity duration-300"
+      :class="showTimer ? 'opacity-100' : 'opacity-0'"
+    >
       <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
         <path
           class="text-gray-700"
@@ -22,7 +26,10 @@
         {{ Math.ceil(secondsLeft) }}s
       </div>
     </div>
-    <div v-if="showLabel" class="text-xs text-gray-400">
+    <div
+      class="text-xs text-gray-400 transition-opacity duration-300 min-h-[1rem]"
+      :class="showLabel ? 'opacity-100' : 'opacity-0'"
+    >
       {{ labelText }}
     </div>
   </div>
