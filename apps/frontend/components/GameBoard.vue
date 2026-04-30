@@ -1,13 +1,15 @@
 <template>
-  <div class="max-w-3xl mx-auto flex flex-col items-center gap-3 sm:gap-6 py-4 sm:py-8 px-2">
+  <div class="max-w-3xl mx-auto flex flex-col items-center gap-3 sm:gap-5 py-4 sm:py-6 px-2">
     <!-- Opponent -->
     <DeckPile
       :player="gameStore.opponentPlayer"
       position="top"
     />
 
-    <!-- Battle Arena -->
-    <BattleArena />
+    <!-- Battle Arena — fixed height prevents parent layout shift -->
+    <div class="w-full min-h-[240px] sm:min-h-[320px] flex items-center justify-center">
+      <BattleArena />
+    </div>
 
     <!-- Player -->
     <DeckPile

@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col items-center justify-center gap-1 sm:gap-2 relative w-full">
+  <div class="flex flex-col items-center justify-center gap-2 sm:gap-3 relative w-full py-2">
     <!-- War Overlay -->
     <Transition name="pop">
       <div
@@ -21,7 +21,7 @@
     <Transition name="pop">
       <div
         v-if="showWinner"
-        class="absolute top-0 z-10 text-lg sm:text-2xl font-black tracking-wide"
+        class="absolute top-1 z-10 text-lg sm:text-2xl font-black tracking-wide"
         :class="winnerTextColor"
       >
         {{ winnerText }}
@@ -31,81 +31,85 @@
     <!-- Timer -->
     <TurnTimer />
 
-    <!-- Opponent Area -->
+    <!-- === OPPONENT (always top) === -->
     <div class="flex flex-col items-center gap-1 w-full">
       <div class="text-xs sm:text-sm font-semibold text-gray-400 truncate max-w-[150px]">
         {{ gameStore.opponentPlayer?.name || 'Opponent' }}
       </div>
-      <!-- Fixed-height card area prevents layout shift -->
-      <div class="flex items-center justify-center min-h-[5.6rem] sm:min-h-[7rem]">
-        <div class="flex items-center">
-          <template v-if="opponentCards.length > 0">
-            <div
-              v-for="(c, i) in opponentCards"
-              :key="`${c.playerId}-${i}`"
-              class="relative transition-all duration-500"
-              :class="[
-                i === opponentCards.length - 1 ? 'z-10' : '-mr-3 sm:-mr-4 opacity-80 scale-90',
-                i === opponentCards.length - 1 && !c.faceDown ? 'animate-flip-in' : ''
-              ]"
-            >
-              <Card
-                :card="c.card"
-                :face-down="c.faceDown"
-                :winner="isWinnerCard(c.playerId) && i === opponentCards.length - 1"
-                :loser="isLoserCard(c.playerId) && i === opponentCards.length - 1"
-              />
-            </div>
-          </template>
-          <template v-else>
-            <!-- Invisible placeholder maintains layout -->
-            <div class="w-16 h-[5.6rem] sm:w-20 sm:h-28 opacity-0" aria-hidden="true" />
-          </template>
+      <!-- Fixed-size card slot — never collapses or shifts -->
+      <div class="relative w-16 h-[5.6rem] sm:w-20 sm:h-28">
+        <!-- Empty slot placeholder (visible when no card) -->
+        <div
+          class="absolute inset-0 rounded-lg border-2 border-dashed border-gray-700 flex items-center justify-center"
+          v-show="!opponentTopCard"
+        >
+          <div class="w-8 h-12 sm:w-12 sm:h-16 bg-gray-800/50 rounded" />
+        </div>
+        <!-- Active card (the top of opponent's committed stack) -->
+        <div
+          v-if="opponentTopCard"
+          class="absolute inset-0"
+          :class="opponentTopCard.justRevealed ? 'animate-flip-in' : ''"
+        >
+          <Card
+            :card="opponentTopCard.card"
+            :face-down="opponentTopCard.faceDown"
+            :winner="isWinnerCard(opponentTopCard.playerId)"
+            :loser="isLoserCard(opponentTopCard.playerId)"
+          />
+        </div>
+        <!-- Stack depth badge -->
+        <div
+          v-if="opponentStackDepth > 1"
+          class="absolute -top-1.5 -right-1.5 bg-gray-700 text-white text-[10px] sm:text-xs font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center border border-gray-600"
+        >
+          {{ opponentStackDepth }}
         </div>
       </div>
     </div>
 
-    <!-- Center: VS or War Pot -->
-    <div class="flex items-center justify-center gap-2 py-1 min-h-[2.5rem]">
+    <!-- === CENTER === -->
+    <div class="flex items-center justify-center min-h-[2rem]">
       <div
         v-if="warPotCount > 0"
-        class="flex items-center gap-1 text-yellow-400"
+        class="flex items-center gap-1.5 text-yellow-400 bg-yellow-900/30 rounded-full px-3 py-1 border border-yellow-700"
       >
-        <div class="w-8 h-10 sm:w-10 sm:h-14 rounded border border-yellow-600 bg-yellow-900/40 flex items-center justify-center">
-          <span class="text-xs sm:text-sm font-bold">+{{ warPotCount }}</span>
-        </div>
+        <span class="text-xs sm:text-sm font-bold">{{ warPotCount }} cards at stake</span>
       </div>
-      <div v-else-if="hasCards" class="text-xs sm:text-sm text-gray-500 font-bold">VS</div>
-      <div v-else class="text-xs text-gray-600">—</div>
+      <div v-else-if="anyCardShowing" class="text-xs sm:text-sm text-gray-600 font-bold">VS</div>
+      <div v-else class="text-xs text-gray-700">—</div>
     </div>
 
-    <!-- Player Area -->
+    <!-- === PLAYER (always bottom) === -->
     <div class="flex flex-col items-center gap-1 w-full">
-      <!-- Fixed-height card area prevents layout shift -->
-      <div class="flex items-center justify-center min-h-[5.6rem] sm:min-h-[7rem]">
-        <div class="flex items-center">
-          <template v-if="playerCards.length > 0">
-            <div
-              v-for="(c, i) in playerCards"
-              :key="`${c.playerId}-${i}`"
-              class="relative transition-all duration-500"
-              :class="[
-                i === playerCards.length - 1 ? 'z-10' : '-mr-3 sm:-mr-4 opacity-80 scale-90',
-                i === playerCards.length - 1 && !c.faceDown ? 'animate-flip-in' : ''
-              ]"
-            >
-              <Card
-                :card="c.card"
-                :face-down="c.faceDown"
-                :winner="isWinnerCard(c.playerId) && i === playerCards.length - 1"
-                :loser="isLoserCard(c.playerId) && i === playerCards.length - 1"
-              />
-            </div>
-          </template>
-          <template v-else>
-            <!-- Invisible placeholder maintains layout -->
-            <div class="w-16 h-[5.6rem] sm:w-20 sm:h-28 opacity-0" aria-hidden="true" />
-          </template>
+      <!-- Fixed-size card slot — never collapses or shifts -->
+      <div class="relative w-16 h-[5.6rem] sm:w-20 sm:h-28">
+        <!-- Empty slot placeholder (visible when no card) -->
+        <div
+          class="absolute inset-0 rounded-lg border-2 border-dashed border-gray-700 flex items-center justify-center"
+          v-show="!playerTopCard"
+        >
+          <div class="w-8 h-12 sm:w-12 sm:h-16 bg-gray-800/50 rounded" />
+        </div>
+        <!-- Active card (the top of player's committed stack) -->
+        <div
+          v-if="playerTopCard"
+          class="absolute inset-0"
+          :class="playerTopCard.justRevealed ? 'animate-flip-in' : ''"
+        >
+          <Card
+            :card="playerTopCard.card"
+            :face-down="playerTopCard.faceDown"
+            :winner="isWinnerCard(playerTopCard.playerId)"
+            :loser="isLoserCard(playerTopCard.playerId)"
+          />
+        </div>
+        <!-- Stack depth badge -->
+        <div
+          v-if="playerStackDepth > 1"
+          class="absolute -top-1.5 -right-1.5 bg-gray-700 text-white text-[10px] sm:text-xs font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center border border-gray-600"
+        >
+          {{ playerStackDepth }}
         </div>
       </div>
       <div class="text-xs sm:text-sm font-semibold text-white truncate max-w-[150px]">
@@ -113,18 +117,12 @@
       </div>
     </div>
 
-    <!-- Empty state -->
+    <!-- Empty state (only when no battle at all) -->
     <div
-      v-if="!hasCards && gameStore.game?.status === 'PLAYING'"
-      class="text-gray-500 text-xs sm:text-sm"
+      v-if="!anyCardShowing && gameStore.game?.status === 'PLAYING'"
+      class="text-gray-500 text-xs sm:text-sm absolute inset-0 flex items-center justify-center pointer-events-none"
     >
-      Both players — press Play Turn
-    </div>
-    <div
-      v-if="gameStore.game?.status === 'WAITING'"
-      class="text-gray-500 text-xs sm:text-sm"
-    >
-      Waiting for players...
+      Press Play Turn
     </div>
   </div>
 </template>
@@ -140,19 +138,56 @@ const gameStore = useGameStore();
 const opponentId = computed(() => gameStore.opponentPlayer?.id);
 const myId = computed(() => gameStore.myPlayer?.id);
 
-const opponentCards = computed(() => {
+interface DisplayCard {
+  playerId: string;
+  card: { value: number; suit: string };
+  faceDown: boolean;
+  justRevealed: boolean;
+}
+
+// Get the "active" card for opponent — the last one they committed for the current step
+const opponentTopCard = computed<DisplayCard | null>(() => {
   const battle = gameStore.game?.currentBattle;
-  if (!battle || !opponentId.value) return [];
-  return battle.cards.filter((c) => c.playerId === opponentId.value);
+  if (!battle || !opponentId.value) return null;
+  const cards = battle.cards.filter((c) => c.playerId === opponentId.value);
+  if (cards.length === 0) return null;
+  const top = cards[cards.length - 1];
+  return {
+    playerId: top.playerId,
+    card: top.card,
+    faceDown: top.faceDown,
+    justRevealed: !top.faceDown && battle.phase === 'REVEAL',
+  };
 });
 
-const playerCards = computed(() => {
+const opponentStackDepth = computed(() => {
   const battle = gameStore.game?.currentBattle;
-  if (!battle || !myId.value) return [];
-  return battle.cards.filter((c) => c.playerId === myId.value);
+  if (!battle || !opponentId.value) return 0;
+  return battle.cards.filter((c) => c.playerId === opponentId.value).length;
 });
 
-const hasCards = computed(() => opponentCards.value.length > 0 || playerCards.value.length > 0);
+// Get the "active" card for player — the last one they committed for the current step
+const playerTopCard = computed<DisplayCard | null>(() => {
+  const battle = gameStore.game?.currentBattle;
+  if (!battle || !myId.value) return null;
+  const cards = battle.cards.filter((c) => c.playerId === myId.value);
+  if (cards.length === 0) return null;
+  const top = cards[cards.length - 1];
+  return {
+    playerId: top.playerId,
+    card: top.card,
+    faceDown: top.faceDown,
+    justRevealed: !top.faceDown && battle.phase === 'REVEAL',
+  };
+});
+
+const playerStackDepth = computed(() => {
+  const battle = gameStore.game?.currentBattle;
+  if (!battle || !myId.value) return 0;
+  return battle.cards.filter((c) => c.playerId === myId.value).length;
+});
+
+const anyCardShowing = computed(() => !!opponentTopCard.value || !!playerTopCard.value);
 
 const showWinner = computed(() => {
   return gameStore.battleResolved && !!gameStore.winnerName;
@@ -184,7 +219,7 @@ const stakeCount = computed(() => {
 
 const warPotCount = computed(() => {
   const battle = gameStore.game?.currentBattle;
-  if (!battle || !gameStore.warActive) return 0;
+  if (!battle) return 0;
   return battle.cards.filter((c) => c.faceDown).length;
 });
 
