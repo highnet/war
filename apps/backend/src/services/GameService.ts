@@ -262,9 +262,9 @@ export class GameService {
     const totalPairs = battle.cards.length / 2;
 
     if (totalPairs === 1) {
-      // Draw reveal resolve
-      const cardA = battle.cards[0];
-      const cardB = battle.cards[1];
+      // Draw reveal resolve — find each player's card by playerId, NOT by array index
+      const cardA = battle.cards.find((c) => c.playerId === playerA.id)!;
+      const cardB = battle.cards.find((c) => c.playerId === playerB.id)!;
       await battleLogRepository.append(gameId, logEntry('DRAW', `${playerA.name} drew ${cardToString(cardA.card)}, ${playerB.name} drew ${cardToString(cardB.card)}`));
 
       if (cardA.card.value === cardB.card.value) {
@@ -296,10 +296,11 @@ export class GameService {
       return;
     }
 
-    // War face-up reveal resolve
-    const lastTwo = battle.cards.slice(-2);
-    const faceUpA = lastTwo[0];
-    const faceUpB = lastTwo[1];
+    // War face-up reveal resolve — find each player's last (face-up) card by playerId
+    const cardsA = battle.cards.filter((c) => c.playerId === playerA.id);
+    const cardsB = battle.cards.filter((c) => c.playerId === playerB.id);
+    const faceUpA = cardsA[cardsA.length - 1];
+    const faceUpB = cardsB[cardsB.length - 1];
 
     if (faceUpA.card.value === faceUpB.card.value) {
       await battleLogRepository.append(gameId, logEntry('WAR', 'WAR continues!'));

@@ -36,19 +36,19 @@
       <div class="text-xs sm:text-sm font-semibold text-gray-400 truncate max-w-[150px]">
         {{ gameStore.opponentPlayer?.name || 'Opponent' }}
       </div>
-      <!-- Fixed-size card slot — never collapses or shifts -->
-      <div class="relative w-16 h-[5.6rem] sm:w-20 sm:h-28">
-        <!-- Empty slot placeholder (visible when no card) -->
+      <!-- Fixed-size card slot — keyed by battleId to force clean re-render on new round -->
+      <div :key="`opp-${battleId}`" class="relative w-16 h-[5.6rem] sm:w-20 sm:h-28">
+        <!-- Placeholder when no card -->
         <div
-          class="absolute inset-0 rounded-lg border-2 border-dashed border-gray-700 flex items-center justify-center"
-          v-show="!opponentTopCard"
+          class="absolute inset-0 rounded-lg border-2 border-dashed border-gray-700 flex items-center justify-center transition-opacity duration-300"
+          :class="opponentTopCard ? 'opacity-0' : 'opacity-100'"
         >
           <div class="w-8 h-12 sm:w-12 sm:h-16 bg-gray-800/50 rounded" />
         </div>
-        <!-- Active card (the top of opponent's committed stack) -->
+        <!-- Active card -->
         <div
           v-if="opponentTopCard"
-          class="absolute inset-0"
+          class="absolute inset-0 transition-opacity duration-300"
           :class="opponentTopCard.justRevealed ? 'animate-flip-in' : ''"
         >
           <Card
@@ -82,19 +82,19 @@
 
     <!-- === PLAYER (always bottom) === -->
     <div class="flex flex-col items-center gap-1 w-full">
-      <!-- Fixed-size card slot — never collapses or shifts -->
-      <div class="relative w-16 h-[5.6rem] sm:w-20 sm:h-28">
-        <!-- Empty slot placeholder (visible when no card) -->
+      <!-- Fixed-size card slot — keyed by battleId to force clean re-render on new round -->
+      <div :key="`plr-${battleId}`" class="relative w-16 h-[5.6rem] sm:w-20 sm:h-28">
+        <!-- Placeholder when no card -->
         <div
-          class="absolute inset-0 rounded-lg border-2 border-dashed border-gray-700 flex items-center justify-center"
-          v-show="!playerTopCard"
+          class="absolute inset-0 rounded-lg border-2 border-dashed border-gray-700 flex items-center justify-center transition-opacity duration-300"
+          :class="playerTopCard ? 'opacity-0' : 'opacity-100'"
         >
           <div class="w-8 h-12 sm:w-12 sm:h-16 bg-gray-800/50 rounded" />
         </div>
-        <!-- Active card (the top of player's committed stack) -->
+        <!-- Active card -->
         <div
           v-if="playerTopCard"
-          class="absolute inset-0"
+          class="absolute inset-0 transition-opacity duration-300"
           :class="playerTopCard.justRevealed ? 'animate-flip-in' : ''"
         >
           <Card
@@ -116,14 +116,6 @@
         {{ gameStore.myPlayer?.name || 'You' }}
       </div>
     </div>
-
-    <!-- Empty state (only when no battle at all) -->
-    <div
-      v-if="!anyCardShowing && gameStore.game?.status === 'PLAYING'"
-      class="text-gray-500 text-xs sm:text-sm absolute inset-0 flex items-center justify-center pointer-events-none"
-    >
-      Press Play Turn
-    </div>
   </div>
 </template>
 
@@ -135,8 +127,17 @@ import TurnTimer from './TurnTimer.vue';
 
 const gameStore = useGameStore();
 
-const opponentId = computed(() => gameStore.opponentPlayer?.id);
-const myId = computed(() => gameStore.myPlayer?.id);
+const opponentId = computed(() => gameStore.opponentPlayer?.id ?? '');
+const myId = computed(() => gameStore.myPlayer?.id ?? '');
+
+// A unique id for the current battle — forces clean re-render when a new round starts
+const battleId = computed(() => {
+  const battle = gameStore.game?.currentBattle;
+  if (!battle) return 'empty';
+  // Hash of all card values in this battle for a stable id
+  const hash = battle.cards.map((c) => `${c.playerId}-${c.card.value}-${c.card.suit}-${c.faceDown ? 'd' : 'u'}`).join('|');
+  return `${battle.phase}-${hash}`;
+});
 
 interface DisplayCard {
   playerId: string;
@@ -145,7 +146,6 @@ interface DisplayCard {
   justRevealed: boolean;
 }
 
-// Get the "active" card for opponent — the last one they committed for the current step
 const opponentTopCard = computed<DisplayCard | null>(() => {
   const battle = gameStore.game?.currentBattle;
   if (!battle || !opponentId.value) return null;
@@ -166,7 +166,6 @@ const opponentStackDepth = computed(() => {
   return battle.cards.filter((c) => c.playerId === opponentId.value).length;
 });
 
-// Get the "active" card for player — the last one they committed for the current step
 const playerTopCard = computed<DisplayCard | null>(() => {
   const battle = gameStore.game?.currentBattle;
   if (!battle || !myId.value) return null;
