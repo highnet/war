@@ -45,7 +45,9 @@ class AIService {
 
       if (shouldCommit) {
         this.clearTimer(gameId);
-        const delay = 600 + Math.random() * 1400; // 0.6s - 2s human-like delay
+        // Longer delay when battle just resolved to let frontend animation finish
+        const baseDelay = (!battle || battle.phase === 'RESOLVED') ? 1400 : 800;
+        const delay = baseDelay + Math.random() * 1200; // 1.4-2.6s after resolve, 0.8-2.0s during play
         const timer = setTimeout(async () => {
           try {
             await gameService.playTurn(gameId, aiPlayer.id);

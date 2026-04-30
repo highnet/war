@@ -195,6 +195,9 @@ export class GameService {
 
   private async commitCard(game: GameEntity, player: PlayerEntity, opponent: PlayerEntity): Promise<GameEntity> {
     if (player.deck.length === 0) {
+      if (game.currentBattle?.isWar) {
+        return this.resolveWarTie(game);
+      }
       return this.forfeit(game, player, opponent, `${player.name} has no cards left`);
     }
 
@@ -324,6 +327,30 @@ export class GameService {
     this.scheduleTimeout(game.id, this.clearDelayMs, () => this.clearBattle(game.id));
   }
 
+  private async resolveWarTie(game: GameEntity): Promise<GameEntity> {
+    this.clearTimeout(game.id);
+    const battle = game.currentBattle!;
+
+    // Return each player's committed cards to their own deck
+    for (const c of battle.cards) {
+      const owner = game.players.find((p) => p.id === c.playerId);
+      if (owner) {
+        owner.deck.push(c.card);
+      }
+    }
+
+    battle.winnerId = null;
+    battle.phase = 'RESOLVED' as BattlePhase;
+    game.commitDeadline = null;
+
+    await battleLogRepository.append(game.id, logEntry('RESOLVED', 'War ends in a tie — cards returned to owners'));
+    await gameRepository.update(game);
+    await publishAndReturn(game);
+
+    this.scheduleTimeout(game.id, this.clearDelayMs, () => this.clearBattle(game.id));
+    return game;
+  }
+
   private async clearBattle(gameId: string) {
     const game = await gameRepository.getById(gameId);
     if (!game || game.status !== 'PLAYING') return;
@@ -359,6 +386,11 @@ export class GameService {
     const missing = counts.find((c) => c.count < maxCount);
 
     if (missing) {
+      if (battle.isWar) {
+        const other = counts.find((c) => c.player.id !== missing.player.id)!;
+        await this.resolveWarTie(game);
+        return;
+      }
       const winner = counts.find((c) => c.player.id !== missing.player.id)!;
       await this.forfeit(game, missing.player, winner.player, `${missing.player.name} ran out of time`);
     }

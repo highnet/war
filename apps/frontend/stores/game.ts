@@ -1,11 +1,13 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Game, Player } from '@war/types';
 
 export const useGameStore = defineStore('game', () => {
   const game = ref<Game | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
+  const isClearing = ref(false);
+  let clearingTimeout: ReturnType<typeof setTimeout> | null = null;
 
   const myPlayer = computed<Player | null>(() => {
     if (!game.value) return null;
@@ -32,18 +34,30 @@ export const useGameStore = defineStore('game', () => {
     return game.value?.currentBattle?.phase === 'RESOLVED';
   });
 
+  // Lock commits during the visual clear animation after a battle resolves
+  watch(battleResolved, (resolved) => {
+    if (resolved) {
+      isClearing.value = true;
+      if (clearingTimeout) clearTimeout(clearingTimeout);
+      clearingTimeout = setTimeout(() => {
+        isClearing.value = false;
+      }, 1200);
+    }
+  });
+
   const gameEnded = computed(() => {
     return game.value?.status === 'ENDED' || game.value?.status === 'FORFEITED';
   });
 
   const canCommit = computed(() => {
     if (!game.value || gameEnded.value) return false;
+    if (isClearing.value) return false;
     const userId = localStorage.getItem('war-user-v2');
     if (!userId) return false;
     const parsed = JSON.parse(userId);
     const battle = game.value.currentBattle;
     if (battle?.phase === 'REVEAL') return false;
-    if (battle?.phase === 'RESOLVED') return true; // can start next round
+    if (battle?.phase === 'RESOLVED') return false; // wait for clear animation
     if (!battle) return true;
     // Check if player already committed for current step
     const myCount = battle.cards.filter((c) => c.playerId === parsed.id).length;
@@ -86,6 +100,7 @@ export const useGameStore = defineStore('game', () => {
     game,
     loading,
     error,
+    isClearing,
     myPlayer,
     opponentPlayer,
     warActive,

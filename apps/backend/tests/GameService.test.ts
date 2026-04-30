@@ -261,7 +261,7 @@ describe('GameService', () => {
     expect(g.currentBattle!.winnerId).toBe(alice.id);
   });
 
-  it('ends game when player has insufficient cards for war', async () => {
+  it('ties war when player has insufficient cards for war', async () => {
     const deckA = [
       { value: 10, suit: 'HEARTS' as const },
     ];
@@ -284,10 +284,19 @@ describe('GameService', () => {
     let g = (await gameRepository.getById(game.id))!;
     expect(g.currentBattle!.phase).toBe('WAR');
 
-    // Alice has 0 cards left. Alice tries to commit war face-down -> forfeit
+    // Alice has 0 cards left. Alice tries to commit war face-down -> war ties
     g = await service.playTurn(game.id, alice.id);
-    expect(g.status).toBe('ENDED');
-    expect(g.winnerId).toBe(bob.id);
+    expect(g.status).toBe('PLAYING');
+    expect(g.currentBattle!.phase).toBe('RESOLVED');
+    expect(g.currentBattle!.winnerId).toBeNull();
+
+    // After clear, both players should have their cards back
+    await flushClear();
+    g = (await gameRepository.getById(game.id))!;
+    expect(g.currentBattle).toBeNull();
+    // Alice got her 10 back, Bob still has his 3 cards
+    expect(g.players.find((p) => p.name === 'Alice')!.deck.length).toBe(1);
+    expect(g.players.find((p) => p.name === 'Bob')!.deck.length).toBe(3);
   });
 
   it('forfeits on leave during PLAYING', async () => {

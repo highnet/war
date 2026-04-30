@@ -9,16 +9,17 @@ A fullstack monorepo implementation of the card game **War** with real-time mult
 - **Step-by-step war resolution** — dramatic face-down / face-up card reveals
 - **Battle logs** persisted in Redis for every game
 - **Opponent deck size** visible at all times
-- **Auto-forfeit** on disconnect or page leave
+- **Auto-forfeit** on disconnect or page leave (with 5-second refresh grace period)
 - **Game expiry** — old games auto-cleaned after 30 minutes of inactivity
-- **Auto-play & speed control** for fast-forwarding games
+- **Matchmaking** — auto-join open lobbies or create new games
+- **Single active game enforcement** — prevents duplicate lobbies per player
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Monorepo | npm workspaces |
-| Backend | Fastify 5 + Mercurius 14 + TypeScript |
+| Backend | Fastify 5 + Mercurius 16 + TypeScript |
 | Real-time | `graphql-ws` over WebSockets |
 | Data Store | Redis 7 (hashes, lists, pub/sub) |
 | Frontend | Nuxt 3.21.2 (SSR) + Vue 3 Composition API |
@@ -26,6 +27,7 @@ A fullstack monorepo implementation of the card game **War** with real-time mult
 | Styling | Tailwind CSS |
 | Testing | Vitest |
 | Containers | Docker + Docker Compose |
+| Deployment | Fly.io |
 
 ## Quick Start
 
@@ -66,34 +68,43 @@ npm run dev --workspace=apps/backend
 npm run dev --workspace=apps/frontend
 ```
 
+## Deploy to Fly.io
+
+```bash
+# One-command deploy (backend + frontend)
+./deploy.sh
+```
+
+Requires a [Fly.io](https://fly.io) account. The backend runs Redis + Fastify in a single machine. See `fly.toml` and `fly.frontend.toml` for configuration.
+
 ## Architecture
 
 ### Backend (`apps/backend`)
 
-- **GameService** — deterministic, pure game logic (draw, compare, war recursion, win detection)
-- **AIService** — watches game state via Redis pub/sub; auto-plays AI turns after 500ms
+- **GameService** — deterministic game logic (draw, compare, war recursion, win detection, war tie on insufficient cards)
+- **AIService** — watches game state via Redis pub/sub; auto-plays AI turns after 0.8–2.0s human-like delay
 - **RedisStore** — ioredis wrapper (single-node; marked with `// SCALE:` for cluster upgrade)
 - **GameRepository** — Redis hashes with JSON fields + 30-min TTL
 - **BattleLogRepository** — Redis lists capped at 100 entries
-- **RedisPubSub** — Redis pub/sub powering GraphQL subscriptions
+- **RedisPubSub** — Redis pub/sub powering GraphQL subscriptions; supports multiple concurrent subscribers
 - **Forfeit logic** — `leaveGame` mutation ends the game if in `PLAYING` status
 
 ### Frontend (`apps/frontend`)
 
-- **Pages:** `/lobby` (create/join), `/game/[id]` (play)
+- **Pages:** `/lobby` (matchmaking), `/game/[id]` (play)
 - **Stores:** `userStore`, `gameStore`, `socketStore`
-- **Composables:** `useGraphQL` (mutations/queries via `$fetch`), `useGameSocket` (subscriptions via `graphql-ws`)
+- **Composables:** `useGraphQL` (mutations/queries via `$fetch`)
 - **Real-time:** Single subscription `gameUpdated(gameId)` pushes full Game state; UI derives all events from it
 
 ## Game Rules
 
 - Standard 52-card deck (values 2–14, Ace = 14)
 - Shuffled and split 26/26
-- Each **Play Turn** reveals top cards
-- Higher card wins the pile (added to bottom of winner's deck)
+- Each **Play Turn** reveals top cards simultaneously
+- Higher card wins the pile (added to winner's score pile)
 - **Tie → WAR:** each player places 1 face-down + 1 face-up card; compare again recursively
-- **Insufficient cards during war → immediate loss**
-- Game ends when opponent has 0 cards or forfeits
+- **Insufficient cards during war → war ties** — cards returned to their owners, game continues
+- Game ends when a player has 0 cards and can't play, or forfeits
 
 ## Testing
 
@@ -138,6 +149,9 @@ war/
 │   ├── types/          # Shared TypeScript types
 │   └── utils/          # Deck logic, shuffle, helpers
 ├── docker-compose.yml  # Redis + backend + frontend
+├── fly.toml            # Backend Fly.io config
+├── fly.frontend.toml   # Frontend Fly.io config
+├── deploy.sh           # One-command deployment script
 ├── PLAN.md             # Detailed implementation plan
 └── AGENTS.md           # Agent quick-start guide
 ```

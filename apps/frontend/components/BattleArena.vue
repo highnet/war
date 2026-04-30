@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col items-center justify-center gap-1 sm:gap-2 min-h-[200px] sm:min-h-[280px] relative w-full">
+  <div class="flex flex-col items-center justify-center gap-1 sm:gap-2 relative w-full">
     <!-- War Overlay -->
     <Transition name="pop">
       <div
@@ -36,28 +36,37 @@
       <div class="text-xs sm:text-sm font-semibold text-gray-400 truncate max-w-[150px]">
         {{ gameStore.opponentPlayer?.name || 'Opponent' }}
       </div>
-      <div class="flex items-center justify-center gap-1 sm:gap-2">
-        <!-- Opponent's committed cards -->
-        <div class="flex items-center gap-0.5">
-          <div
-            v-for="(c, i) in opponentCards"
-            :key="`${c.playerId}-${i}`"
-            class="relative"
-            :class="i === opponentCards.length - 1 ? 'z-10' : '-mr-3 sm:-mr-4 opacity-80 scale-90'"
-          >
-            <Card
-              :card="c.card"
-              :face-down="c.faceDown"
-              :winner="isWinnerCard(c.playerId) && i === opponentCards.length - 1"
-              :loser="isLoserCard(c.playerId) && i === opponentCards.length - 1"
-            />
-          </div>
+      <!-- Fixed-height card area prevents layout shift -->
+      <div class="flex items-center justify-center min-h-[5.6rem] sm:min-h-[7rem]">
+        <div class="flex items-center">
+          <template v-if="opponentCards.length > 0">
+            <div
+              v-for="(c, i) in opponentCards"
+              :key="`${c.playerId}-${i}`"
+              class="relative transition-all duration-500"
+              :class="[
+                i === opponentCards.length - 1 ? 'z-10' : '-mr-3 sm:-mr-4 opacity-80 scale-90',
+                i === opponentCards.length - 1 && !c.faceDown ? 'animate-flip-in' : ''
+              ]"
+            >
+              <Card
+                :card="c.card"
+                :face-down="c.faceDown"
+                :winner="isWinnerCard(c.playerId) && i === opponentCards.length - 1"
+                :loser="isLoserCard(c.playerId) && i === opponentCards.length - 1"
+              />
+            </div>
+          </template>
+          <template v-else>
+            <!-- Invisible placeholder maintains layout -->
+            <div class="w-16 h-[5.6rem] sm:w-20 sm:h-28 opacity-0" aria-hidden="true" />
+          </template>
         </div>
       </div>
     </div>
 
     <!-- Center: VS or War Pot -->
-    <div class="flex items-center justify-center gap-2 py-1">
+    <div class="flex items-center justify-center gap-2 py-1 min-h-[2.5rem]">
       <div
         v-if="warPotCount > 0"
         class="flex items-center gap-1 text-yellow-400"
@@ -67,26 +76,36 @@
         </div>
       </div>
       <div v-else-if="hasCards" class="text-xs sm:text-sm text-gray-500 font-bold">VS</div>
+      <div v-else class="text-xs text-gray-600">—</div>
     </div>
 
     <!-- Player Area -->
     <div class="flex flex-col items-center gap-1 w-full">
-      <div class="flex items-center justify-center gap-1 sm:gap-2">
-        <!-- Player's committed cards -->
-        <div class="flex items-center gap-0.5">
-          <div
-            v-for="(c, i) in playerCards"
-            :key="`${c.playerId}-${i}`"
-            class="relative"
-            :class="i === playerCards.length - 1 ? 'z-10' : '-mr-3 sm:-mr-4 opacity-80 scale-90'"
-          >
-            <Card
-              :card="c.card"
-              :face-down="c.faceDown"
-              :winner="isWinnerCard(c.playerId) && i === playerCards.length - 1"
-              :loser="isLoserCard(c.playerId) && i === playerCards.length - 1"
-            />
-          </div>
+      <!-- Fixed-height card area prevents layout shift -->
+      <div class="flex items-center justify-center min-h-[5.6rem] sm:min-h-[7rem]">
+        <div class="flex items-center">
+          <template v-if="playerCards.length > 0">
+            <div
+              v-for="(c, i) in playerCards"
+              :key="`${c.playerId}-${i}`"
+              class="relative transition-all duration-500"
+              :class="[
+                i === playerCards.length - 1 ? 'z-10' : '-mr-3 sm:-mr-4 opacity-80 scale-90',
+                i === playerCards.length - 1 && !c.faceDown ? 'animate-flip-in' : ''
+              ]"
+            >
+              <Card
+                :card="c.card"
+                :face-down="c.faceDown"
+                :winner="isWinnerCard(c.playerId) && i === playerCards.length - 1"
+                :loser="isLoserCard(c.playerId) && i === playerCards.length - 1"
+              />
+            </div>
+          </template>
+          <template v-else>
+            <!-- Invisible placeholder maintains layout -->
+            <div class="w-16 h-[5.6rem] sm:w-20 sm:h-28 opacity-0" aria-hidden="true" />
+          </template>
         </div>
       </div>
       <div class="text-xs sm:text-sm font-semibold text-white truncate max-w-[150px]">
@@ -111,13 +130,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed } from 'vue';
 import { useGameStore } from '~/stores/game';
 import Card from './Card.vue';
 import TurnTimer from './TurnTimer.vue';
 
 const gameStore = useGameStore();
-const isAnimatingWin = ref(false);
 
 const opponentId = computed(() => gameStore.opponentPlayer?.id);
 const myId = computed(() => gameStore.myPlayer?.id);
@@ -165,7 +183,6 @@ const stakeCount = computed(() => {
 });
 
 const warPotCount = computed(() => {
-  // Number of face-down cards already committed in this war
   const battle = gameStore.game?.currentBattle;
   if (!battle || !gameStore.warActive) return 0;
   return battle.cards.filter((c) => c.faceDown).length;
@@ -178,16 +195,6 @@ function isWinnerCard(playerId: string): boolean {
 function isLoserCard(playerId: string): boolean {
   return gameStore.battleResolved && gameStore.game?.currentBattle?.winnerId !== null && gameStore.game?.currentBattle?.winnerId !== playerId;
 }
-
-// Trigger win animation when battle resolves
-watch(() => gameStore.battleResolved, (resolved) => {
-  if (resolved) {
-    isAnimatingWin.value = true;
-    setTimeout(() => {
-      isAnimatingWin.value = false;
-    }, 1200);
-  }
-});
 </script>
 
 <style scoped>
@@ -201,5 +208,13 @@ watch(() => gameStore.battleResolved, (resolved) => {
   0% { transform: scale(0.5); opacity: 0; }
   70% { transform: scale(1.15); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-flip-in {
+  animation: flip-in 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes flip-in {
+  0% { transform: rotateY(90deg) scale(0.8); opacity: 0; }
+  100% { transform: rotateY(0deg) scale(1); opacity: 1; }
 }
 </style>
